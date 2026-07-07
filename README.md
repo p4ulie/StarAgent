@@ -126,6 +126,8 @@ Each source is a module in [`src/star_agent/ingestion/sources/`](src/star_agent/
 | `vehicles` | In-game vehicle stats + descriptions from game files (~290) | `https://api.star-citizen.wiki/api/v2/vehicles` | [`star_citizen_wiki.py`](src/star_agent/ingestion/sources/star_citizen_wiki.py) |
 | `items` | Ship components & FPS items from game files (~12,000 raw; paints and description-less entries skipped) | `https://api.star-citizen.wiki/api/v2/items` | [`star_citizen_wiki.py`](src/star_agent/ingestion/sources/star_citizen_wiki.py) |
 | `uex_commodities` | Commodity trading: prices + best buy/sell terminals (~150 commodities, community-reported) | `https://api.uexcorp.space/2.0/commodities` + `/commodities_prices_all` | [`uex.py`](src/star_agent/ingestion/sources/uex.py) |
+| `uex_vehicle_prices` | Where to buy each ship in-game (aUEC) — requires `UEX_API_TOKEN` | `https://api.uexcorp.space/2.0/vehicles_purchases_prices_all` | [`uex.py`](src/star_agent/ingestion/sources/uex.py) |
+| `uex_trade_routes` | Best trade routes per origin planet (profit/ROI) — requires `UEX_API_TOKEN` | `https://api.uexcorp.space/2.0/commodities_routes` | [`uex.py`](src/star_agent/ingestion/sources/uex.py) |
 
 To add a new source: create a module there implementing `Source` (see `base.py`), then register
 it in the `SOURCES` dict in
