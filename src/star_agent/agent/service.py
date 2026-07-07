@@ -75,7 +75,15 @@ class AgentService:
             user_id=user_id, session_id=session_id, new_message=message
         ):
             if event.is_final_response() and event.content and event.content.parts:
-                answer = event.content.parts[0].text or ""
+                # Thinking models (e.g. Qwen3) return reasoning as parts marked
+                # thought=True ahead of the real answer — keep only answer text.
+                texts = [
+                    p.text
+                    for p in event.content.parts
+                    if p.text and not getattr(p, "thought", False)
+                ]
+                if texts:
+                    answer = "\n".join(texts)
         return answer
 
     async def answer(
