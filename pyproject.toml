@@ -1,0 +1,46 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "star-agent"
+version = "0.1.0"
+description = "Knowledge base agent for Star Citizen — Discord bot + MCP server backed by a RAG system"
+readme = "README.md"
+requires-python = ">=3.11"
+license = { file = "LICENSE" }
+authors = [{ name = "Pavol Antalik" }]
+dependencies = [
+    # Discord transport
+    "discord.py>=2.7,<3",
+    # Agent framework + LLM routing (LiteLlm -> external llama.cpp OpenAI-compatible endpoint)
+    "google-adk>=2,<3",
+    "litellm>=1.60",
+    # Vector store. Server runs in its own container; we connect via HttpClient.
+    # Full package (not chromadb-client) so the local MiniLM embedding function,
+    # which runs client-side, is available for ingestion and query embedding.
+    "chromadb>=1.5,<2",
+    # MCP server transport
+    "mcp>=1.2",
+    # Ingestion + config
+    "httpx>=0.27",
+    "beautifulsoup4>=4.12",
+    "lxml>=5.0",
+    "pydantic-settings>=2.2",
+    "python-dotenv>=1.0",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8", "pytest-asyncio>=0.23", "ruff>=0.6"]
+
+[project.scripts]
+star-agent-bot = "star_agent.main:main"
+star-agent-mcp = "star_agent.mcp.server:main"
+star-agent-ingest = "star_agent.ingestion.build_index:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]

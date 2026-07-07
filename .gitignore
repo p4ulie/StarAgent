@@ -1,0 +1,27 @@
+# Secrets & local config — never commit
+.env
+*.token
+
+# Vector store data (Chroma volume)
+chroma-data/
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+build/
+dist/
+.venv/
+venv/
+.env.local
+
+# Tooling / caches
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+
+# Editors / OS
+.vscode/
+.idea/
+.DS_Store

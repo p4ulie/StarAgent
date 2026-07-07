@@ -1,0 +1,39 @@
+# StarAgent stack. The LLM is NOT here — run your own llama.cpp server and point
+# LLM_BASE_URL at it (e.g. http://host.docker.internal:8080/v1).
+#
+#   cp .env.example .env   # set DISCORD_TOKEN (and LLM_BASE_URL if needed)
+#   docker compose up --build
+#   docker compose run --rm bot star-agent-ingest   # (re)build the knowledge base
+
+services:
+  chroma:
+    image: chromadb/chroma
+    volumes:
+      - ./chroma-data:/data
+    restart: unless-stopped
+    # Not published to the host — only reachable on the internal compose network.
+
+  bot:
+    build: .
+    image: star-agent:latest
+    command: ["star-agent-bot"]
+    env_file: .env
+    depends_on:
+      - chroma
+    extra_hosts:
+      # Lets the container reach a llama.cpp server running on the host.
+      - "host.docker.internal:host-gateway"
+    restart: unless-stopped
+
+  mcp:
+    image: star-agent:latest
+    build: .
+    command: ["star-agent-mcp"]
+    env_file: .env
+    depends_on:
+      - chroma
+    ports:
+      - "${MCP_PORT:-8765}:8765"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    restart: unless-stopped
