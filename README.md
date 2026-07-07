@@ -182,6 +182,10 @@ reliably** (the agent calls one retrieval tool) plus grounded summarization. Any
 **GPU (reference setup):** a mid-size model like Qwen3.5-9B Q4_K_M gives fast, high-quality
 answers.
 
+**Hosted / authenticated endpoints:** any OpenAI-compatible API works — set `LLM_BASE_URL` to the
+endpoint, `LLM_MODEL` to the model id, and `LLM_API_KEY` to your key (e.g. OpenAI, OpenRouter, or a
+llama.cpp server behind an auth proxy). Local llama.cpp needs no key, so `LLM_API_KEY` stays blank.
+
 **CPU-only is viable** with a small model — the sweet spot is **3–4B parameters, Q4_K_M**:
 
 | Model | Size (Q4) | Tool calling in llama.cpp | Notes |

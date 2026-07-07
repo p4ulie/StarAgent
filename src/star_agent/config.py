@@ -23,10 +23,13 @@ class Settings(BaseSettings):
         default=None, description="Optional guild id for instant slash-command sync during dev"
     )
 
-    # --- LLM (external llama.cpp, OpenAI-compatible) ---
+    # --- LLM (external OpenAI-compatible server) ---
     llm_base_url: str = "http://host.docker.internal:8080/v1"
     llm_model: str = "llama.cpp"
     llm_timeout: float = 120.0
+    # Optional — needed only for authenticated endpoints (OpenAI, OpenRouter,
+    # a llama.cpp server behind an auth proxy). Local llama.cpp ignores it.
+    llm_api_key: str | None = None
 
     # --- ChromaDB ---
     chroma_host: str = "chroma"
@@ -40,6 +43,7 @@ class Settings(BaseSettings):
     # collection — see README "Faster ingestion".
     embedding_base_url: str | None = None
     embedding_model: str = "nomic-embed-text"
+    embedding_api_key: str | None = None
 
     # --- Ingestion ---
     ingest_user_agent: str = "StarAgent/0.1 (+https://github.com/p4ulie/StarAgent)"
@@ -54,7 +58,12 @@ class Settings(BaseSettings):
     starcitizen_api_key: str | None = None
 
     @field_validator(
-        "discord_guild_id", "uex_api_token", "starcitizen_api_key", mode="before"
+        "discord_guild_id",
+        "uex_api_token",
+        "starcitizen_api_key",
+        "llm_api_key",
+        "embedding_api_key",
+        mode="before",
     )
     @classmethod
     def _blank_env_is_unset(cls, v: object) -> object:

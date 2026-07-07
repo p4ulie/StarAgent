@@ -23,10 +23,11 @@ from star_agent.config import Settings
 class OpenAICompatibleEmbeddingFunction:
     """Minimal EF for OpenAI-compatible /v1/embeddings endpoints (llama.cpp)."""
 
-    def __init__(self, base_url: str, model: str) -> None:
+    def __init__(self, base_url: str, model: str, api_key: str | None = None) -> None:
         self._url = base_url.rstrip("/") + "/embeddings"
         self._model = model
-        self._client = httpx.Client(timeout=120.0)
+        headers = {"Authorization": f"Bearer {api_key}"} if api_key else None
+        self._client = httpx.Client(timeout=120.0, headers=headers)
 
     def __call__(self, input: list[str]) -> list[list[float]]:  # noqa: A002 — chroma EF protocol
         resp = self._client.post(
@@ -47,6 +48,8 @@ def get_embedding_function(settings: Settings | None = None):
     """
     if settings is not None and settings.embedding_base_url:
         return OpenAICompatibleEmbeddingFunction(
-            settings.embedding_base_url, settings.embedding_model
+            settings.embedding_base_url,
+            settings.embedding_model,
+            settings.embedding_api_key,
         )
     return embedding_functions.DefaultEmbeddingFunction()

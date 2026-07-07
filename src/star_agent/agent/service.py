@@ -42,10 +42,12 @@ class AgentService:
         self._agent = LlmAgent(
             name="star_agent",
             model=LiteLlm(
-                # LiteLlm -> OpenAI-compatible llama.cpp server at LLM_BASE_URL.
+                # LiteLlm -> OpenAI-compatible server at LLM_BASE_URL.
                 model=f"openai/{settings.llm_model}",
                 api_base=settings.llm_base_url,
-                api_key="sk-none",  # llama.cpp ignores it; LiteLlm requires a value
+                # Real key for authenticated endpoints; local llama.cpp ignores
+                # it but LiteLlm requires a non-empty value.
+                api_key=settings.llm_api_key or "sk-none",
             ),
             instruction=SYSTEM_INSTRUCTION,
             tools=[tools.search_star_citizen_kb],
