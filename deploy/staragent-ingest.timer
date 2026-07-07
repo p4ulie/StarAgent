@@ -6,7 +6,7 @@
 Description=Run StarAgent ingestion on a schedule
 
 [Timer]
-OnCalendar=*-*-* 04:17:00
+OnCalendar=__ONCALENDAR__
 # Spread load / avoid the exact minute.
 RandomizedDelaySec=600
 # If the machine was off at the scheduled time, run once at next boot.

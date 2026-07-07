@@ -135,9 +135,20 @@ would compete with the bot for CPU.)
 ingestion on a schedule (default: daily at 04:17 local). Because unchanged documents are skipped,
 these runs are typically ~3 minutes. Trigger one immediately with
 `systemctl --user start staragent-ingest.service`; check the next run with
-`systemctl --user list-timers staragent-ingest.timer`; change the cadence by editing
-`OnCalendar=` in [`deploy/staragent-ingest.timer`](deploy/staragent-ingest.timer) and re-running
-the installer.
+`systemctl --user list-timers staragent-ingest.timer`.
+
+**Set the schedule** at install time via the `STARAGENT_INGEST_SCHEDULE` env var (systemd
+`OnCalendar` syntax):
+
+```bash
+STARAGENT_INGEST_SCHEDULE="Mon *-*-* 05:00:00" ./deploy/install-service.sh   # weekly, Mon 05:00
+STARAGENT_INGEST_SCHEDULE="*-*-* */6:00:00"     ./deploy/install-service.sh   # every 6 hours
+STARAGENT_INGEST_SCHEDULE="daily"               ./deploy/install-service.sh   # daily at 00:00
+```
+
+To change it later **without reinstalling**, use a systemd override (survives updates):
+`systemctl --user edit staragent-ingest.timer`, add an `[Timer]` section with your new
+`OnCalendar=`, then `systemctl --user daemon-reload`.
 
 ### Registered sources and the URLs they pull
 

@@ -10,9 +10,14 @@
 set -euo pipefail
 
 REPO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-UNIT_SRC="$REPO_DIR/deploy/staragent.service"
 UNIT_DIR="$HOME/.config/systemd/user"
 DOCKER_BIN="$(command -v docker || true)"
+
+# Ingestion schedule (systemd OnCalendar syntax). Override with the
+# STARAGENT_INGEST_SCHEDULE env var, e.g.:
+#   STARAGENT_INGEST_SCHEDULE="Mon *-*-* 05:00:00" ./deploy/install-service.sh   # weekly
+#   STARAGENT_INGEST_SCHEDULE="*-*-* */6:00:00"     ./deploy/install-service.sh   # every 6h
+INGEST_SCHEDULE="${STARAGENT_INGEST_SCHEDULE:-*-*-* 04:17:00}"
 
 if [ -z "$DOCKER_BIN" ]; then
     echo "ERROR: docker not found in PATH" >&2
@@ -26,8 +31,10 @@ if [ ! -f "$REPO_DIR/.env" ]; then
     echo "WARNING: $REPO_DIR/.env not found — the bot will not start without it" >&2
 fi
 
-render() {  # render __REPO_DIR__/__DOCKER__ placeholders into the user unit dir
-    sed -e "s|__REPO_DIR__|$REPO_DIR|g" -e "s|__DOCKER__|$DOCKER_BIN|g" \
+render() {  # render placeholders into the user unit dir
+    sed -e "s|__REPO_DIR__|$REPO_DIR|g" \
+        -e "s|__DOCKER__|$DOCKER_BIN|g" \
+        -e "s|__ONCALENDAR__|$INGEST_SCHEDULE|g" \
         "$REPO_DIR/deploy/$1" > "$UNIT_DIR/$1"
     echo "Installed $UNIT_DIR/$1"
 }
@@ -36,6 +43,7 @@ mkdir -p "$UNIT_DIR"
 render staragent.service           # the stack (docker compose up -d)
 render staragent-ingest.service    # oneshot ingestion, triggered by the timer
 render staragent-ingest.timer      # schedule for the ingestion
+echo "Ingestion schedule: $INGEST_SCHEDULE"
 
 systemctl --user daemon-reload
 systemctl --user enable staragent.service
