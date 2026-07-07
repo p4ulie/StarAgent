@@ -61,3 +61,17 @@ class VectorStore:
     def count(self) -> int:
         """Number of documents currently indexed."""
         return self._collection.count()
+
+    def doc_hashes(self) -> dict[str, str]:
+        """Map of doc_id -> content_hash for everything currently indexed.
+
+        Used by ingestion to skip re-embedding unchanged documents.
+        """
+        result = self._collection.get(include=["metadatas"], limit=1_000_000)
+        hashes: dict[str, str] = {}
+        for meta in result.get("metadatas") or []:
+            meta = meta or {}
+            doc_id, chash = meta.get("doc_id"), meta.get("content_hash")
+            if doc_id and chash:
+                hashes[str(doc_id)] = str(chash)
+        return hashes

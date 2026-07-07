@@ -20,7 +20,7 @@ from datetime import datetime, timezone
 from tqdm import tqdm
 
 from star_agent.config import Settings, get_settings
-from star_agent.ingestion.chunker import Chunk, chunk_document
+from star_agent.ingestion.chunker import Chunk, chunk_document, content_hash
 from star_agent.ingestion.loaders import HttpFetcher
 from star_agent.ingestion.sources.rsi_ship_matrix import RsiShipMatrixSource
 from star_agent.ingestion.sources.star_citizen_wiki import (
@@ -54,26 +54,42 @@ SOURCES = {
     UexTradeRoutesSource.name: UexTradeRoutesSource,
 }
 
-# Upsert in small batches so the embedding progress bar moves smoothly
-# (embeddings are computed client-side inside upsert).
-_UPSERT_BATCH_SIZE = 32
+# Upsert in batches (embeddings are computed client-side inside upsert).
+# Larger batches improve ONNX embedding throughput.
+_UPSERT_BATCH_SIZE = 128
 
 
-def _ingest_source(source, store: VectorStore, retrieved_at: str) -> int:
-    """Fetch, chunk, and upsert one source. Returns the number of chunks."""
+def _ingest_source(
+    source,
+    store: VectorStore,
+    retrieved_at: str,
+    existing_hashes: dict[str, str] | None = None,
+) -> int:
+    """Fetch, chunk, and upsert one source. Returns the number of chunks.
+
+    Documents whose ``content_hash`` matches what is already indexed are
+    skipped entirely — re-runs only embed new or changed content.
+    """
+    existing_hashes = existing_hashes or {}
     # 1. Fetch — document count is unknown up front, so this bar just counts up.
     # Dedupe by id: paginated APIs can return the same item on two pages when
     # new content lands mid-crawl and shifts the pages (Chroma rejects
     # duplicate ids within one upsert batch).
     documents = []
     seen_ids: set[str] = set()
+    unchanged = 0
     with tqdm(desc=f"[{source.name}] fetching documents", unit="doc") as bar:
         for doc in source.fetch():
             if doc.id in seen_ids:
                 continue
             seen_ids.add(doc.id)
-            documents.append(doc)
             bar.update(1)
+            if existing_hashes.get(doc.id) == content_hash(doc.text):
+                unchanged += 1
+                continue
+            documents.append(doc)
+    if unchanged:
+        print(f"[{source.name}] {unchanged} unchanged documents skipped")
 
     # 2. Chunk
     chunks: list[Chunk] = []
@@ -100,11 +116,13 @@ def build_index(
     settings: Settings | None = None,
     source_names: list[str] | None = None,
     max_docs: int | None = None,
+    force: bool = False,
 ) -> dict[str, int]:
     """(Re)build the knowledge base from the selected sources.
 
     ``source_names`` selects which registered sources run (default: all).
     ``max_docs`` caps documents per source (default: each source's own cap).
+    Unchanged documents (matching content hash) are skipped unless ``force``.
     Returns a mapping of source name -> number of chunks upserted. A failing
     source is logged and skipped so one bad source can't abort the whole build.
     """
@@ -118,13 +136,19 @@ def build_index(
           "(first run downloads it — may take a minute)...")
     store = VectorStore(settings)
     retrieved_at = datetime.now(timezone.utc).isoformat()
+    existing_hashes = {} if force else store.doc_hashes()
+    if existing_hashes:
+        print(f"Loaded {len(existing_hashes)} existing document hashes "
+              "(unchanged documents will be skipped; --force re-embeds all)")
     results: dict[str, int] = {}
 
     with HttpFetcher(settings) as http:
         for name in selected:
             source = SOURCES[name](http, max_docs=max_docs)
             try:
-                results[name] = _ingest_source(source, store, retrieved_at)
+                results[name] = _ingest_source(
+                    source, store, retrieved_at, existing_hashes
+                )
             except Exception:  # noqa: BLE001 — one source must not abort the build
                 logger.exception("Source %r failed; skipping", name)
                 results[name] = 0
@@ -155,6 +179,11 @@ def main() -> None:
     parser.add_argument(
         "--list", action="store_true", help="List available sources and exit."
     )
+    parser.add_argument(
+        "--force",
+        action="store_true",
+        help="Re-embed everything, ignoring stored content hashes.",
+    )
     args = parser.parse_args()
 
     if args.list:
@@ -169,7 +198,9 @@ def main() -> None:
         level=logging.WARNING,  # keep the console clean for the progress bars
         format="%(asctime)s %(levelname)s %(name)s: %(message)s",
     )
-    results = build_index(source_names=args.source, max_docs=args.max_docs)
+    results = build_index(
+        source_names=args.source, max_docs=args.max_docs, force=args.force
+    )
     store = VectorStore(get_settings())
     print("\nIngestion complete:")
     for name, n in results.items():

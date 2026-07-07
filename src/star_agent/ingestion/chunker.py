@@ -2,10 +2,16 @@
 
 from __future__ import annotations
 
+import hashlib
 from dataclasses import dataclass
 from typing import Any
 
 from star_agent.ingestion.sources.base import Document
+
+
+def content_hash(text: str) -> str:
+    """Stable short hash of document text — used to skip unchanged re-embeds."""
+    return hashlib.sha256(text.encode("utf-8")).hexdigest()[:16]
 
 
 @dataclass(slots=True)
@@ -56,6 +62,7 @@ def chunk_document(
             "retrieved_at": retrieved_at,
             "doc_id": doc.id,
             "chunk_index": i,
+            "content_hash": content_hash(doc.text),
         }
         # Chroma metadata values must be str/int/float/bool.
         metadata.update({k: str(v) for k, v in doc.extra.items()})

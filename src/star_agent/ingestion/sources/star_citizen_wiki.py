@@ -31,6 +31,13 @@ def _english_text(item: dict[str, Any]) -> str:
     return ""
 
 
+_PER_PAGE = 30
+
+
+def _page_url(endpoint: str, page: int) -> str:
+    return f"{endpoint}?limit={_PER_PAGE}&page%5Bnumber%5D={page}"
+
+
 def _paginate(http: HttpFetcher, endpoint: str, max_docs: int) -> Iterator[dict[str, Any]]:
     """Yield items across pages until exhausted or ``max_docs`` reached.
 
@@ -38,21 +45,40 @@ def _paginate(http: HttpFetcher, endpoint: str, max_docs: int) -> Iterator[dict[
     Do NOT follow ``links.next``: the API appends a new ``page[number]`` param on
     every hop instead of replacing it, and after ~10 hops the crawl silently
     loops back to earlier pages, re-serving the same articles.
+
+    Page 1 is fetched alone to learn ``last_page``; the remaining pages are
+    fetched concurrently (order-preserving) via :meth:`HttpFetcher.get_json_many`.
     """
     yielded = 0
-    page = 1
-    last_page = 1
-    while page <= last_page:
-        payload = http.get_json(f"{endpoint}?limit=30&page%5Bnumber%5D={page}")
-        meta = payload.get("meta") or {}
-        last_page = int(meta.get("last_page") or last_page)
+
+    def _emit(payload: dict[str, Any]) -> Iterator[dict[str, Any]]:
+        nonlocal yielded
         for item in payload.get("data") or []:
             if isinstance(item, dict):
                 yield item
                 yielded += 1
                 if max_docs and yielded >= max_docs:
                     return
-        page += 1
+
+    first = http.get_json(_page_url(endpoint, 1))
+    yield from _emit(first)
+    if max_docs and yielded >= max_docs:
+        return
+
+    last_page = int((first.get("meta") or {}).get("last_page") or 1)
+    if max_docs:
+        # No point fetching pages past the cap.
+        last_page = min(last_page, -(-max_docs // _PER_PAGE))
+
+    # Fetch remaining pages in chunks so results stream instead of buffering
+    # the entire crawl in memory.
+    batch = 8
+    for start in range(2, last_page + 1, batch):
+        pages = range(start, min(start + batch, last_page + 1))
+        for payload in http.get_json_many([_page_url(endpoint, p) for p in pages]):
+            yield from _emit(payload)
+            if max_docs and yielded >= max_docs:
+                return
 
 
 class GalactapediaSource:

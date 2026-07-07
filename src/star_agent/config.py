@@ -50,8 +50,13 @@ class Settings(BaseSettings):
     )
     @classmethod
     def _blank_env_is_unset(cls, v: object) -> object:
-        """Treat empty strings (e.g. `DISCORD_GUILD_ID=` in .env) as unset."""
-        if isinstance(v, str) and not v.strip():
+        """Treat blank values as unset — including inline-comment-only values.
+
+        pydantic-settings does not strip inline comments, so a line like
+        ``DISCORD_GUILD_ID=  # my server id`` arrives as ``"# my server id"``
+        and would fail int parsing and kill the process at startup.
+        """
+        if isinstance(v, str) and (not v.strip() or v.strip().startswith("#")):
             return None
         return v
 
