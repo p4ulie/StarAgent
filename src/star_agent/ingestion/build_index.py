@@ -67,49 +67,49 @@ def _ingest_source(
 ) -> int:
     """Fetch, chunk, and upsert one source. Returns the number of chunks.
 
-    Documents whose ``content_hash`` matches what is already indexed are
-    skipped entirely — re-runs only embed new or changed content.
+    Streams document -> chunk -> embed -> upsert so peak memory stays flat
+    (only one batch of chunks is held at a time) — important on small hosts.
+    Documents whose ``content_hash`` matches what is indexed are skipped, so
+    re-runs only embed new or changed content.
     """
     existing_hashes = existing_hashes or {}
-    # 1. Fetch — document count is unknown up front, so this bar just counts up.
-    # Dedupe by id: paginated APIs can return the same item on two pages when
-    # new content lands mid-crawl and shifts the pages (Chroma rejects
-    # duplicate ids within one upsert batch).
-    documents = []
     seen_ids: set[str] = set()
+    pending: list[Chunk] = []
     unchanged = 0
-    with tqdm(desc=f"[{source.name}] fetching documents", unit="doc") as bar:
+    total = 0
+
+    def flush() -> None:
+        if not pending:
+            return
+        store.upsert(
+            ids=[c.id for c in pending],
+            documents=[c.text for c in pending],
+            metadatas=[c.metadata for c in pending],
+        )
+        pending.clear()
+
+    with tqdm(desc=f"[{source.name}] embed+upsert", unit="chunk") as bar:
         for doc in source.fetch():
+            # Dedupe by id: paginated APIs can re-serve an item across pages;
+            # Chroma also rejects duplicate ids within one upsert batch.
             if doc.id in seen_ids:
                 continue
             seen_ids.add(doc.id)
-            bar.update(1)
             if existing_hashes.get(doc.id) == content_hash(doc.text):
                 unchanged += 1
                 continue
-            documents.append(doc)
+            for chunk in chunk_document(doc, retrieved_at):
+                pending.append(chunk)
+                total += 1
+                if len(pending) >= _UPSERT_BATCH_SIZE:
+                    flush()
+                    bar.update(_UPSERT_BATCH_SIZE)
+        flush()
+        bar.update(len(pending))  # no-op after clear, keeps the bar honest
+
     if unchanged:
         print(f"[{source.name}] {unchanged} unchanged documents skipped")
-
-    # 2. Chunk
-    chunks: list[Chunk] = []
-    for doc in tqdm(documents, desc=f"[{source.name}] chunking", unit="doc"):
-        chunks.extend(chunk_document(doc, retrieved_at))
-
-    # 3. Embed + upsert in batches (embedding happens inside upsert)
-    with tqdm(
-        total=len(chunks), desc=f"[{source.name}] embedding + upserting", unit="chunk"
-    ) as bar:
-        for start in range(0, len(chunks), _UPSERT_BATCH_SIZE):
-            batch = chunks[start : start + _UPSERT_BATCH_SIZE]
-            store.upsert(
-                ids=[c.id for c in batch],
-                documents=[c.text for c in batch],
-                metadatas=[c.metadata for c in batch],
-            )
-            bar.update(len(batch))
-
-    return len(chunks)
+    return total
 
 
 def build_index(

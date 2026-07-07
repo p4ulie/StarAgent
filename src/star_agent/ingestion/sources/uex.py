@@ -133,14 +133,15 @@ class UexCommoditiesSource:
 
 
 class UexVehiclePricesSource:
-    """Where to buy each ship in-game (aUEC), one document per vehicle.
+    """Where to buy AND rent each ship in-game (aUEC), one doc per vehicle.
 
-    Uses ``vehicles_purchases_prices_all`` (requires the Bearer token) — NOT
-    ``vehicles_prices``, which is pledge-store USD pricing.
+    Merges ``vehicles_purchases_prices_all`` and ``vehicles_rentals_prices_all``
+    (both require the Bearer token) — NOT ``vehicles_prices``, which is
+    pledge-store USD pricing.
     """
 
     name = "uex_vehicle_prices"
-    default_max_docs = 0  # ~150 purchasable vehicles
+    default_max_docs = 0  # ~200 vehicles with buy and/or rent listings
 
     def __init__(self, http: HttpFetcher, max_docs: int | None = None) -> None:
         self._http = http
@@ -148,49 +149,70 @@ class UexVehiclePricesSource:
         token = get_settings().uex_api_token
         self._headers = {"Authorization": f"Bearer {token}"} if token else None
 
-    def fetch(self) -> Iterable[Document]:
-        payload = self._http.get_json(
-            f"{_API_BASE}/vehicles_purchases_prices_all", headers=self._headers
-        )
-        records = payload.get("data") if isinstance(payload, dict) else None
-        if not isinstance(records, list):
-            logger.warning("UEX vehicles_purchases_prices_all returned no data")
-            return
+    def _records(self, endpoint: str) -> list[dict[str, Any]]:
+        payload = self._http.get_json(f"{_API_BASE}/{endpoint}", headers=self._headers)
+        data = payload.get("data") if isinstance(payload, dict) else None
+        if not isinstance(data, list):
+            logger.warning("UEX %s returned no data", endpoint)
+            return []
+        return data
 
-        by_vehicle: dict[int, list[dict[str, Any]]] = defaultdict(list)
+    def fetch(self) -> Iterable[Document]:
+        buys: dict[int, list[dict[str, Any]]] = defaultdict(list)
+        rents: dict[int, list[dict[str, Any]]] = defaultdict(list)
         names: dict[int, str] = {}
-        for rec in records:
+
+        for rec in self._records("vehicles_purchases_prices_all"):
             vid = rec.get("id_vehicle")
             if isinstance(vid, int) and rec.get("price_buy"):
-                by_vehicle[vid].append(rec)
+                buys[vid].append(rec)
+                names.setdefault(vid, str(rec.get("vehicle_name") or "").strip())
+        for rec in self._records("vehicles_rentals_prices_all"):
+            vid = rec.get("id_vehicle")
+            if isinstance(vid, int) and rec.get("price_rent"):
+                rents[vid].append(rec)
                 names.setdefault(vid, str(rec.get("vehicle_name") or "").strip())
 
         count = 0
-        for vid, recs in by_vehicle.items():
-            name = names.get(vid)
+        for vid in sorted(names):
+            name = names[vid]
             if not name:
                 continue
-            recs.sort(key=lambda r: r["price_buy"])
-            lines = [
-                f"- {r.get('terminal_name')}: {_fmt_price_flat(r['price_buy'])}"
-                for r in recs
-            ]
-            text = (
-                f"Where to buy the {name} in game (aUEC):\n"
-                + "\n".join(lines)
-                + "\n\nPrices are community-reported via UEX and change with game patches."
+            sections: list[str] = []
+            if buys.get(vid):
+                recs = sorted(buys[vid], key=lambda r: r["price_buy"])
+                sections.append(
+                    f"Where to BUY the {name} in game (aUEC):\n"
+                    + "\n".join(
+                        f"- {r.get('terminal_name')}: {_fmt_price_flat(r['price_buy'])}"
+                        for r in recs
+                    )
+                )
+            if rents.get(vid):
+                recs = sorted(rents[vid], key=lambda r: r["price_rent"])
+                sections.append(
+                    f"Where to RENT the {name} in game (aUEC):\n"
+                    + "\n".join(
+                        f"- {r.get('terminal_name')}: {_fmt_price_flat(r['price_rent'])}"
+                        for r in recs
+                    )
+                )
+            if not sections:
+                continue
+            sections.append(
+                "Prices are community-reported via UEX and change with game patches."
             )
             yield Document(
                 id=f"uex-vehicle-price::{vid}",
-                title=f"{name} (in-game purchase locations)",
+                title=f"{name} (in-game buy & rental locations)",
                 url="https://uexcorp.space/vehicles",
                 source="UEX Corp",
-                text=text,
+                text="\n\n".join(sections),
             )
             count += 1
             if self._max_docs and count >= self._max_docs:
                 return
-        logger.info("UEX: produced %d vehicle-price documents", count)
+        logger.info("UEX: produced %d vehicle buy/rent documents", count)
 
 
 class UexTradeRoutesSource:
