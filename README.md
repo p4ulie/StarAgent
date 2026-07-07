@@ -37,13 +37,53 @@ MCP client   ──tool──▶ MCP server        ┘
 ## Quick start
 
 1. **Run a llama.cpp server** (OpenAI-compatible), e.g. `llama-server -m model.gguf --port 8080`.
-2. `cp .env.example .env` and set `DISCORD_TOKEN` (and `LLM_BASE_URL` if not the default).
-3. `docker compose up --build` — starts ChromaDB, the Discord bot, and the MCP server.
-4. Build the knowledge base: `docker compose run --rm bot star-agent-ingest`.
-5. In Discord, run `/ask question:<your Star Citizen question>`.
+2. **Set up the Discord bot** (see [Discord setup](#discord-setup) below) to get your bot token.
+3. `cp .env.example .env` and set `DISCORD_TOKEN` (and `LLM_BASE_URL` if not the default).
+4. `docker compose up --build` — starts ChromaDB, the Discord bot, and the MCP server.
+5. Build the knowledge base: `docker compose run --rm bot star-agent-ingest`.
+6. In Discord, run `/ask question:<your Star Citizen question>`.
 
 Local dev without Docker: `pip install -e .[dev]`, run a local Chroma (`CHROMA_HOST=localhost`),
 then `star-agent-bot` / `star-agent-mcp` / `star-agent-ingest`.
+
+## Discord setup
+
+How to create the bot and add it to your server:
+
+1. **Create the application.** Go to the
+   [Discord Developer Portal](https://discord.com/developers/applications), sign in, click
+   **New Application**, and give it a name (e.g. *StarAgent*).
+
+2. **Get the bot token.** In your application, open the **Bot** tab and click
+   **Reset Token** → copy the token shown (it is displayed only once). Put it in your `.env` as
+   `DISCORD_TOKEN=...`. **Treat the token like a password** — anyone who has it controls your
+   bot. Never commit it; if it ever leaks, reset it immediately on the same page.
+
+3. **Intents.** StarAgent only uses slash commands, so **no privileged gateway intents are
+   needed** — leave *Presence*, *Server Members*, and *Message Content* switched **off** on the
+   Bot tab (this also avoids Discord's verification requirements later).
+
+4. **Build the invite URL.** Open **OAuth2 → URL Generator** and select:
+   - **Scopes:** `bot` **and** `applications.commands` (the second one is required for slash
+     commands to appear).
+   - **Bot permissions:** `Send Messages`, `Embed Links`, and (if you'll use it in threads)
+     `Send Messages in Threads`. Nothing else is needed.
+
+   Copy the generated URL at the bottom. It looks like:
+   `https://discord.com/oauth2/authorize?client_id=<APP_ID>&permissions=<...>&scope=bot+applications.commands`
+
+5. **Invite the bot.** Open that URL in your browser, pick your server from the dropdown
+   (you need **Manage Server** permission there), and click **Authorize**. The bot appears in
+   the member list — offline until you start it.
+
+6. **(Recommended for development) instant command sync.** Enable **Developer Mode** in your
+   Discord client (*User Settings → Advanced*), right-click your server icon → **Copy Server
+   ID**, and set it in `.env` as `DISCORD_GUILD_ID=...`. Commands sync to that server instantly;
+   without it, global commands can take up to ~1 hour to appear.
+
+7. **Start the bot** (`docker compose up -d bot`) and type `/ask` in your server. Available
+   commands: `/ask` (ask a Star Citizen question), `/health` (knowledge-base status), and
+   `/reindex` (admins only — rebuild the knowledge base).
 
 ## Data sources
 
