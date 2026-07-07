@@ -40,10 +40,10 @@ class HttpFetcher:
             time.sleep(self._delay - elapsed)
         self._last_request = time.monotonic()
 
-    def get_json(self, url: str) -> Any:
+    def get_json(self, url: str, headers: dict[str, str] | None = None) -> Any:
         self._throttle()
         logger.debug("GET (json) %s", url)
-        resp = self._client.get(url)
+        resp = self._client.get(url, headers=headers)
         resp.raise_for_status()
         return resp.json()
 

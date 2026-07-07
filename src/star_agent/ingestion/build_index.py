@@ -31,6 +31,7 @@ from star_agent.ingestion.sources.star_citizen_wiki import (
     StarSystemsSource,
     VehiclesSource,
 )
+from star_agent.ingestion.sources.uex import UexCommoditiesSource
 from star_agent.rag.store import VectorStore
 
 logger = logging.getLogger(__name__)
@@ -44,6 +45,7 @@ SOURCES = {
     CelestialObjectsSource.name: CelestialObjectsSource,
     VehiclesSource.name: VehiclesSource,
     ItemsSource.name: ItemsSource,
+    UexCommoditiesSource.name: UexCommoditiesSource,
 }
 
 # Upsert in small batches so the embedding progress bar moves smoothly

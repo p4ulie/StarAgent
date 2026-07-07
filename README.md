@@ -125,6 +125,7 @@ Each source is a module in [`src/star_agent/ingestion/sources/`](src/star_agent/
 | `celestial_objects` | Planets, moons & stations with lore (~1,700, described only) | `https://api.star-citizen.wiki/api/v2/celestial-objects` | [`star_citizen_wiki.py`](src/star_agent/ingestion/sources/star_citizen_wiki.py) |
 | `vehicles` | In-game vehicle stats + descriptions from game files (~290) | `https://api.star-citizen.wiki/api/v2/vehicles` | [`star_citizen_wiki.py`](src/star_agent/ingestion/sources/star_citizen_wiki.py) |
 | `items` | Ship components & FPS items from game files (~12,000 raw; paints and description-less entries skipped) | `https://api.star-citizen.wiki/api/v2/items` | [`star_citizen_wiki.py`](src/star_agent/ingestion/sources/star_citizen_wiki.py) |
+| `uex_commodities` | Commodity trading: prices + best buy/sell terminals (~150 commodities, community-reported) | `https://api.uexcorp.space/2.0/commodities` + `/commodities_prices_all` | [`uex.py`](src/star_agent/ingestion/sources/uex.py) |
 
 To add a new source: create a module there implementing `Source` (see `base.py`), then register
 it in the `SOURCES` dict in
@@ -144,8 +145,8 @@ is in **[`docs/data-sources.md`](docs/data-sources.md)**.
   [REST API](https://api.star-citizen.wiki)), [Fandom wiki](https://starcitizen.fandom.com)
 - **Item / ship data:** [scunpacked](https://scunpacked.com) & GitHub game-data dumps,
   [Universal Item Finder](https://finder.cstone.space), [Erkul](https://www.erkul.games)
-- **Trade / economy (planned, not in MVP):** [UEX](https://uexcorp.space),
-  [SC Trade Tools](https://sc-trade.tools)
+- **Trade / economy:** [UEX](https://uexcorp.space) (ingested — commodities & trade locations;
+  set `UEX_API_TOKEN` in `.env` for rate-limit headroom); [SC Trade Tools](https://sc-trade.tools) (planned)
 
 Community wikis are unofficial fansites; their content is licensed CC BY-NC-SA / CC BY-SA
 (attribution + non-commercial). Respect each source's terms of service and `robots.txt`.
