@@ -18,6 +18,9 @@ services:
     image: star-agent:latest
     command: ["star-agent-bot"]
     env_file: .env
+    volumes:
+      # Persist the local embedding-model cache across (re)runs.
+      - model-cache:/home/app/.cache
     depends_on:
       - chroma
     extra_hosts:
@@ -30,6 +33,8 @@ services:
     build: .
     command: ["star-agent-mcp"]
     env_file: .env
+    volumes:
+      - model-cache:/home/app/.cache
     depends_on:
       - chroma
     ports:
@@ -37,3 +42,9 @@ services:
     extra_hosts:
       - "host.docker.internal:host-gateway"
     restart: unless-stopped
+
+volumes:
+  # Named volume: embedding-model cache (internal, ~80 MB after first download).
+  # The knowledge base itself lives in ./chroma-data (bind mount) for easy
+  # inspection and backup.
+  model-cache:

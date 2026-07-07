@@ -14,7 +14,11 @@ COPY src ./src
 RUN pip install --upgrade pip && pip install .
 
 # Run as a non-root user; HOME is writable for the local embedding-model cache.
-RUN useradd --create-home app && chown -R app:app /app
+# Pre-create ~/.cache with the right owner so the named volume mounted there
+# (see docker-compose.yml) is initialized app-owned, not root-owned.
+RUN useradd --create-home app \
+    && mkdir -p /home/app/.cache \
+    && chown -R app:app /app /home/app/.cache
 USER app
 
 # Default entrypoint is the Discord bot; compose overrides it for the MCP server
