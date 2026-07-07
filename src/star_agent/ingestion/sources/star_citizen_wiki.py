@@ -291,7 +291,7 @@ class CommLinksSource:
     """
 
     name = "comm_links"
-    default_max_docs = 300
+    default_max_docs = 10000  # effectively all posts (~6,000 available)
 
     def __init__(self, http: HttpFetcher, max_docs: int | None = None) -> None:
         self._http = http

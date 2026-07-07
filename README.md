@@ -131,6 +131,14 @@ docker compose run --rm bot star-agent-ingest -s comm_links --max-docs 1000
 a Discord command — a full run exceeds Discord's 15-minute interaction limit and the embedding
 would compete with the bot for CPU.)
 
+**Scheduled auto-ingest:** the systemd installer (below) also sets up a **timer** that runs a full
+ingestion on a schedule (default: daily at 04:17 local). Because unchanged documents are skipped,
+these runs are typically ~3 minutes. Trigger one immediately with
+`systemctl --user start staragent-ingest.service`; check the next run with
+`systemctl --user list-timers staragent-ingest.timer`; change the cadence by editing
+`OnCalendar=` in [`deploy/staragent-ingest.timer`](deploy/staragent-ingest.timer) and re-running
+the installer.
+
 ### Registered sources and the URLs they pull
 
 Each source is a module in [`src/star_agent/ingestion/sources/`](src/star_agent/ingestion/sources/) —
@@ -140,7 +148,7 @@ Each source is a module in [`src/star_agent/ingestion/sources/`](src/star_agent/
 |---|---|---|---|
 | `rsi_ship_matrix` | Official ship specs (~250 ships) | `https://robertsspaceindustries.com/ship-matrix/index` | [`rsi_ship_matrix.py`](src/star_agent/ingestion/sources/rsi_ship_matrix.py) |
 | `galactapedia` | Official lore (~1,500 articles) | `https://api.star-citizen.wiki/api/v2/galactapedia` | [`star_citizen_wiki.py`](src/star_agent/ingestion/sources/star_citizen_wiki.py) |
-| `comm_links` | Official news/patch notes (300 most recent by default, ~6,000 available) | `https://api.star-citizen.wiki/api/v2/comm-links` | [`star_citizen_wiki.py`](src/star_agent/ingestion/sources/star_citizen_wiki.py) |
+| `comm_links` | Official news/patch notes (all ~6,000 posts) | `https://api.star-citizen.wiki/api/v2/comm-links` | [`star_citizen_wiki.py`](src/star_agent/ingestion/sources/star_citizen_wiki.py) |
 | `starsystems` | Star systems with lore descriptions (~100) | `https://api.star-citizen.wiki/api/v2/starsystems` | [`star_citizen_wiki.py`](src/star_agent/ingestion/sources/star_citizen_wiki.py) |
 | `celestial_objects` | Planets, moons & stations with lore (~1,700, described only) | `https://api.star-citizen.wiki/api/v2/celestial-objects` | [`star_citizen_wiki.py`](src/star_agent/ingestion/sources/star_citizen_wiki.py) |
 | `vehicles` | In-game vehicle stats + descriptions from game files (~290) | `https://api.star-citizen.wiki/api/v2/vehicles` | [`star_citizen_wiki.py`](src/star_agent/ingestion/sources/star_citizen_wiki.py) |
@@ -234,6 +242,9 @@ journalctl --user -u staragent        # service logs (container logs: docker com
 The unit runs `docker compose up -d` (stop: `docker compose down`) and waits for the Docker
 daemon before starting. Containers themselves restart on failure via compose's
 `restart: unless-stopped`.
+
+It also installs and enables **`staragent-ingest.timer`** (+ its oneshot service), which
+re-ingests the knowledge base on a schedule (see *Scheduled auto-ingest* above).
 
 ## Data sources
 

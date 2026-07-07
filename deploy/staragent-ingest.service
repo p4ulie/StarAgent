@@ -1,0 +1,19 @@
+# StarAgent scheduled ingestion — a oneshot unit triggered by the timer.
+# Runs the ingestion in a throwaway container against the running stack.
+# Re-runs are cheap: unchanged documents are skipped by content hash.
+#
+# Manual run:  systemctl --user start staragent-ingest.service
+# Logs:        journalctl --user -u staragent-ingest.service
+
+[Unit]
+Description=StarAgent knowledge-base ingestion (all sources)
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=oneshot
+WorkingDirectory=__REPO_DIR__
+ExecStartPre=/bin/sh -c 'until docker info >/dev/null 2>&1; do sleep 2; done'
+ExecStart=__DOCKER__ compose run --rm bot star-agent-ingest
+# A full from-scratch embed can take a while; incremental runs are minutes.
+TimeoutStartSec=7200
