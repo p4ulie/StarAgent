@@ -46,9 +46,16 @@ _UPSERT_BATCH_SIZE = 32
 def _ingest_source(source, store: VectorStore, retrieved_at: str) -> int:
     """Fetch, chunk, and upsert one source. Returns the number of chunks."""
     # 1. Fetch — document count is unknown up front, so this bar just counts up.
+    # Dedupe by id: paginated APIs can return the same item on two pages when
+    # new content lands mid-crawl and shifts the pages (Chroma rejects
+    # duplicate ids within one upsert batch).
     documents = []
+    seen_ids: set[str] = set()
     with tqdm(desc=f"[{source.name}] fetching documents", unit="doc") as bar:
         for doc in source.fetch():
+            if doc.id in seen_ids:
+                continue
+            seen_ids.add(doc.id)
             documents.append(doc)
             bar.update(1)
 
