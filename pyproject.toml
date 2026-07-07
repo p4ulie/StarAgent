@@ -28,6 +28,8 @@ dependencies = [
     "lxml>=5.0",
     "pydantic-settings>=2.2",
     "python-dotenv>=1.0",
+    # Progress bars for the manual ingestion run
+    "tqdm>=4.66",
 ]
 
 [project.optional-dependencies]
