@@ -26,7 +26,7 @@ class Settings(BaseSettings):
     # --- LLM (external OpenAI-compatible server) ---
     llm_base_url: str = "http://host.docker.internal:8080/v1"
     llm_model: str = "llama.cpp"
-    llm_timeout: float = 120.0
+    llm_timeout: float = 180.0
     # Optional — needed only for authenticated endpoints (OpenAI, OpenRouter,
     # a llama.cpp server behind an auth proxy). Local llama.cpp ignores it.
     llm_api_key: str | None = None

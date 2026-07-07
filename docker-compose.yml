@@ -18,6 +18,10 @@ services:
     image: star-agent:latest
     command: ["star-agent-bot"]
     env_file: .env
+    environment:
+      # Use LiteLLM's bundled cost map — never fetch it over the network
+      # (avoids an event-loop stall / heartbeat block on the first request).
+      LITELLM_LOCAL_MODEL_COST_MAP: "True"
     volumes:
       # Persist the local embedding-model cache across (re)runs.
       - model-cache:/home/app/.cache
@@ -33,6 +37,8 @@ services:
     build: .
     command: ["star-agent-mcp"]
     env_file: .env
+    environment:
+      LITELLM_LOCAL_MODEL_COST_MAP: "True"
     volumes:
       - model-cache:/home/app/.cache
     depends_on:

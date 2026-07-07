@@ -40,6 +40,10 @@ class StarAgentBot(commands.Bot):
         for ext in _EXTENSIONS:
             await self.load_extension(ext)
 
+        # Warm the LLM in the background so the first /ask doesn't pay the
+        # model's cold-load. Non-blocking: startup continues regardless.
+        self.loop.create_task(self._warmup())
+
         if self.settings.discord_guild_id:
             guild = discord.Object(id=self.settings.discord_guild_id)
             self.tree.copy_global_to(guild=guild)
@@ -48,6 +52,15 @@ class StarAgentBot(commands.Bot):
         else:
             await self.tree.sync()
             logger.info("Synced global commands (may take up to ~1h to propagate)")
+
+    async def _warmup(self) -> None:
+        if self.agent_service is None:
+            return
+        try:
+            await self.agent_service.answer("ping", user_id="warmup", session_id="warmup")
+            logger.info("LLM warmup complete")
+        except Exception as exc:  # noqa: BLE001 — warmup is best-effort
+            logger.warning("LLM warmup failed (model may be cold on first query): %s", exc)
 
     async def on_ready(self) -> None:
         logger.info("Logged in as %s (id: %s)", self.user, getattr(self.user, "id", "?"))
