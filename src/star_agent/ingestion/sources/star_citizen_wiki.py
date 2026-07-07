@@ -31,18 +31,28 @@ def _english_text(item: dict[str, Any]) -> str:
     return ""
 
 
-def _paginate(http: HttpFetcher, url: str, max_docs: int) -> Iterator[dict[str, Any]]:
-    """Yield items across pages until exhausted or ``max_docs`` reached."""
+def _paginate(http: HttpFetcher, endpoint: str, max_docs: int) -> Iterator[dict[str, Any]]:
+    """Yield items across pages until exhausted or ``max_docs`` reached.
+
+    Pages are addressed explicitly (``page[number]=N`` up to ``meta.last_page``).
+    Do NOT follow ``links.next``: the API appends a new ``page[number]`` param on
+    every hop instead of replacing it, and after ~10 hops the crawl silently
+    loops back to earlier pages, re-serving the same articles.
+    """
     yielded = 0
-    while url:
-        payload = http.get_json(url)
+    page = 1
+    last_page = 1
+    while page <= last_page:
+        payload = http.get_json(f"{endpoint}?limit=30&page%5Bnumber%5D={page}")
+        meta = payload.get("meta") or {}
+        last_page = int(meta.get("last_page") or last_page)
         for item in payload.get("data") or []:
             if isinstance(item, dict):
                 yield item
                 yielded += 1
                 if max_docs and yielded >= max_docs:
                     return
-        url = (payload.get("links") or {}).get("next")
+        page += 1
 
 
 class GalactapediaSource:
@@ -58,7 +68,7 @@ class GalactapediaSource:
     def fetch(self) -> Iterable[Document]:
         skipped = 0
         for item in _paginate(
-            self._http, f"{_API_BASE}/galactapedia?limit=30", self._max_docs
+            self._http, f"{_API_BASE}/galactapedia", self._max_docs
         ):
             text = _english_text(item)
             title = str(item.get("title") or "").strip()
@@ -99,7 +109,7 @@ class CommLinksSource:
 
     def fetch(self) -> Iterable[Document]:
         for item in _paginate(
-            self._http, f"{_API_BASE}/comm-links?limit=30", self._max_docs
+            self._http, f"{_API_BASE}/comm-links", self._max_docs
         ):
             text = _english_text(item)
             title = str(item.get("title") or "").strip()
