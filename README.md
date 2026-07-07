@@ -88,6 +88,8 @@ How to create the bot and add it to your server:
 
 Ingestion is a **manual command**, safe to re-run anytime (documents have stable ids, so
 re-running updates in place — no duplicates). Run it after game patches to keep answers current.
+Re-runs are **incremental**: unchanged documents are detected by content hash and skipped, so a
+full refresh takes ~3 minutes when little has changed (use `--force` to re-embed everything).
 
 ```bash
 # Ingest ALL registered sources (with per-source progress bars):

@@ -151,7 +151,7 @@ def build_index(
                 )
             except Exception:  # noqa: BLE001 — one source must not abort the build
                 logger.exception("Source %r failed; skipping", name)
-                results[name] = 0
+                results[name] = -1  # sentinel: failure (0 = all docs unchanged)
 
     return results
 
@@ -204,7 +204,12 @@ def main() -> None:
     store = VectorStore(get_settings())
     print("\nIngestion complete:")
     for name, n in results.items():
-        status = f"{n} chunks" if n else "FAILED (see log above)"
+        if n < 0:
+            status = "FAILED (see log above)"
+        elif n == 0:
+            status = "up to date (all documents unchanged)"
+        else:
+            status = f"{n} chunks"
         print(f"  {name}: {status}")
     print(f"Knowledge base now holds {store.count()} documents.")
 
