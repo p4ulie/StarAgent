@@ -82,8 +82,7 @@ How to create the bot and add it to your server:
    without it, global commands can take up to ~1 hour to appear.
 
 7. **Start the bot** (`docker compose up -d bot`) and type `/ask` in your server. Available
-   commands: `/ask` (ask a Star Citizen question), `/health` (knowledge-base status), and
-   `/reindex` (admins only — rebuild the knowledge base).
+   commands: `/ask` (ask a Star Citizen question) and `/health` (knowledge-base status).
 
 ## Ingestion — building & updating the knowledge base
 
@@ -108,8 +107,9 @@ docker compose run --rm bot star-agent-ingest -s galactapedia --max-docs 50
 docker compose run --rm bot star-agent-ingest -s comm_links --max-docs 1000
 ```
 
-(Without Docker: the same command is `star-agent-ingest ...`. Admins can also trigger a full
-run from Discord with `/reindex`.)
+(Without Docker: the same command is `star-agent-ingest ...`. Ingestion is deliberately **not**
+a Discord command — a full run exceeds Discord's 15-minute interaction limit and the embedding
+would compete with the bot for CPU.)
 
 ### Registered sources and the URLs they pull
 
@@ -121,6 +121,10 @@ Each source is a module in [`src/star_agent/ingestion/sources/`](src/star_agent/
 | `rsi_ship_matrix` | Official ship specs (~250 ships) | `https://robertsspaceindustries.com/ship-matrix/index` | [`rsi_ship_matrix.py`](src/star_agent/ingestion/sources/rsi_ship_matrix.py) |
 | `galactapedia` | Official lore (~1,500 articles) | `https://api.star-citizen.wiki/api/v2/galactapedia` | [`star_citizen_wiki.py`](src/star_agent/ingestion/sources/star_citizen_wiki.py) |
 | `comm_links` | Official news/patch notes (300 most recent by default, ~6,000 available) | `https://api.star-citizen.wiki/api/v2/comm-links` | [`star_citizen_wiki.py`](src/star_agent/ingestion/sources/star_citizen_wiki.py) |
+| `starsystems` | Star systems with lore descriptions (~100) | `https://api.star-citizen.wiki/api/v2/starsystems` | [`star_citizen_wiki.py`](src/star_agent/ingestion/sources/star_citizen_wiki.py) |
+| `celestial_objects` | Planets, moons & stations with lore (~1,700, described only) | `https://api.star-citizen.wiki/api/v2/celestial-objects` | [`star_citizen_wiki.py`](src/star_agent/ingestion/sources/star_citizen_wiki.py) |
+| `vehicles` | In-game vehicle stats + descriptions from game files (~290) | `https://api.star-citizen.wiki/api/v2/vehicles` | [`star_citizen_wiki.py`](src/star_agent/ingestion/sources/star_citizen_wiki.py) |
+| `items` | Ship components & FPS items from game files (~12,000 raw; paints and description-less entries skipped) | `https://api.star-citizen.wiki/api/v2/items` | [`star_citizen_wiki.py`](src/star_agent/ingestion/sources/star_citizen_wiki.py) |
 
 To add a new source: create a module there implementing `Source` (see `base.py`), then register
 it in the `SOURCES` dict in

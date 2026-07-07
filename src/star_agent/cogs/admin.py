@@ -1,4 +1,12 @@
-"""Admin slash commands: /health and /reindex."""
+"""Admin slash commands.
+
+Note: knowledge-base (re)indexing is deliberately NOT a Discord command. A full
+run takes 15+ minutes — past Discord's 15-minute interaction-token lifetime —
+and local embedding would hog the bot container's CPU, degrading /ask for
+everyone. Run it as the manual CLI instead:
+
+    docker compose run --rm bot star-agent-ingest
+"""
 
 from __future__ import annotations
 
@@ -8,8 +16,6 @@ import logging
 import discord
 from discord import app_commands
 from discord.ext import commands
-
-from star_agent.ingestion.build_index import build_index
 
 logger = logging.getLogger(__name__)
 
@@ -34,22 +40,6 @@ class AdminCog(commands.Cog):
         await interaction.followup.send(
             f"✅ Knowledge base online — {count} documents indexed."
         )
-
-    @app_commands.command(
-        name="reindex", description="Rebuild the Star Citizen knowledge base"
-    )
-    @app_commands.default_permissions(administrator=True)
-    async def reindex(self, interaction: discord.Interaction) -> None:
-        await interaction.response.defer(thinking=True, ephemeral=True)
-        try:
-            # Ingestion is blocking (HTTP + embedding) — run off the event loop.
-            results = await asyncio.to_thread(build_index, self.bot.settings)
-        except Exception:
-            logger.exception("Reindex failed")
-            await interaction.followup.send("⚠️ Reindex failed — check the logs.")
-            return
-        summary = "\n".join(f"• {name}: {n} chunks" for name, n in results.items())
-        await interaction.followup.send(f"✅ Reindex complete:\n{summary or 'no sources'}")
 
 
 async def setup(bot: commands.Bot) -> None:

@@ -93,6 +93,170 @@ class GalactapediaSource:
             logger.info("Galactapedia: skipped %d empty/pending articles", skipped)
 
 
+class StarSystemsSource:
+    """Star systems (name, type, lore description) via the community API."""
+
+    name = "starsystems"
+    default_max_docs = 0  # ~100 systems
+
+    def __init__(self, http: HttpFetcher, max_docs: int | None = None) -> None:
+        self._http = http
+        self._max_docs = self.default_max_docs if max_docs is None else max_docs
+
+    def fetch(self) -> Iterable[Document]:
+        for item in _paginate(self._http, f"{_API_BASE}/starsystems", self._max_docs):
+            code = str(item.get("code") or "").strip()
+            name = str(item.get("name") or "").strip()
+            if not code or not name:
+                continue
+            desc = ""
+            if isinstance(item.get("description"), dict):
+                desc = str(item["description"].get("en_EN") or "").strip()
+            facts = [
+                f"Star system: {name}",
+                f"Type: {item.get('type') or 'unknown'}",
+            ]
+            text = "\n".join(facts) + (f"\n\n{desc}" if desc else "")
+            yield Document(
+                id=f"starsystem::{code}",
+                title=f"{name} system",
+                url=str(item.get("web_url") or ""),
+                source="Starmap (star system)",
+                text=text,
+            )
+
+
+class CelestialObjectsSource:
+    """Planets, moons, and stations with lore descriptions via the community API."""
+
+    name = "celestial_objects"
+    default_max_docs = 0
+
+    def __init__(self, http: HttpFetcher, max_docs: int | None = None) -> None:
+        self._http = http
+        self._max_docs = self.default_max_docs if max_docs is None else max_docs
+
+    def fetch(self) -> Iterable[Document]:
+        skipped = 0
+        for item in _paginate(
+            self._http, f"{_API_BASE}/celestial-objects", self._max_docs
+        ):
+            code = str(item.get("code") or "").strip()
+            name = str(item.get("name") or "").strip()
+            desc = ""
+            if isinstance(item.get("description"), dict):
+                desc = str(item["description"].get("en_EN") or "").strip()
+            # Objects without prose are bare coordinates — no retrieval value.
+            if not code or not name or not desc:
+                skipped += 1
+                continue
+            designation = str(item.get("designation") or "").strip()
+            facts = [f"{name}" + (f" ({designation})" if designation else "")]
+            if item.get("type"):
+                facts.append(f"Type: {item['type']}")
+            if item.get("habitable") is not None:
+                facts.append(f"Habitable: {'yes' if item['habitable'] else 'no'}")
+            yield Document(
+                id=f"celestial::{code}",
+                title=name,
+                url=str(item.get("web_url") or ""),
+                source="Starmap (celestial object)",
+                text="\n".join(facts) + f"\n\n{desc}",
+            )
+        if skipped:
+            logger.info("Celestial objects: skipped %d without descriptions", skipped)
+
+
+class VehiclesSource:
+    """In-game vehicle data (game-file extract) via the community API.
+
+    Complements the RSI Ship Matrix with live-patch stats and the in-game
+    description text.
+    """
+
+    name = "vehicles"
+    default_max_docs = 0  # ~290 vehicles
+
+    def __init__(self, http: HttpFetcher, max_docs: int | None = None) -> None:
+        self._http = http
+        self._max_docs = self.default_max_docs if max_docs is None else max_docs
+
+    def fetch(self) -> Iterable[Document]:
+        for item in _paginate(self._http, f"{_API_BASE}/vehicles", self._max_docs):
+            name = str(item.get("name") or "").strip()
+            key = str(item.get("class_name") or item.get("id") or "").strip()
+            if not name or not key:
+                continue
+            crew = item.get("crew") or {}
+            facts: list[str] = [f"Vehicle: {name}"]
+            if item.get("career"):
+                facts.append(f"Career: {item['career']}")
+            if item.get("cargo_capacity") is not None:
+                facts.append(f"Cargo capacity (SCU): {item['cargo_capacity']}")
+            if isinstance(crew, dict) and crew.get("min") is not None:
+                facts.append(f"Crew: {crew.get('min')}–{crew.get('max')}")
+            desc = str(
+                item.get("game_description") or item.get("description") or ""
+            ).strip()
+            yield Document(
+                id=f"vehicle::{key}",
+                title=name,
+                url=str(item.get("link") or ""),
+                source="Game data (vehicle)",
+                text="\n".join(facts) + (f"\n\n{desc}" if desc else ""),
+            )
+
+
+class ItemsSource:
+    """Ship components & FPS items (game-file extract) via the community API.
+
+    Skips cosmetic paints and description-less entries — of ~12,000 raw items
+    only those with prose are worth retrieval.
+    """
+
+    name = "items"
+    default_max_docs = 0
+
+    _SKIP_CLASSIFICATIONS = {"Paints"}
+
+    def __init__(self, http: HttpFetcher, max_docs: int | None = None) -> None:
+        self._http = http
+        self._max_docs = self.default_max_docs if max_docs is None else max_docs
+
+    def fetch(self) -> Iterable[Document]:
+        skipped = 0
+        for item in _paginate(self._http, f"{_API_BASE}/items", self._max_docs):
+            name = str(item.get("name") or "").strip()
+            key = str(item.get("class_name") or "").strip()
+            desc = str(item.get("description") or "").strip()
+            label = str(item.get("classification_label") or "").strip()
+            if not name or not key or not desc or label in self._SKIP_CLASSIFICATIONS:
+                skipped += 1
+                continue
+            manufacturer = item.get("manufacturer")
+            if isinstance(manufacturer, dict):
+                manufacturer = manufacturer.get("name")
+            facts = [f"Item: {name}"]
+            if label:
+                facts.append(f"Category: {label}")
+            if manufacturer:
+                facts.append(f"Manufacturer: {manufacturer}")
+            if item.get("size") is not None:
+                facts.append(f"Size: {item['size']}")
+            if item.get("grade") is not None:
+                facts.append(f"Grade: {item['grade']}")
+            yield Document(
+                id=f"item::{key}",
+                title=name,
+                url=str(item.get("link") or ""),
+                source="Game data (item)",
+                text="\n".join(facts) + f"\n\n{desc}",
+                extra={"classification": label} if label else {},
+            )
+        if skipped:
+            logger.info("Items: skipped %d paints/description-less entries", skipped)
+
+
 class CommLinksSource:
     """Official news posts (Comm-Link) via the community API mirror.
 

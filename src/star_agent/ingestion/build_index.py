@@ -24,8 +24,12 @@ from star_agent.ingestion.chunker import Chunk, chunk_document
 from star_agent.ingestion.loaders import HttpFetcher
 from star_agent.ingestion.sources.rsi_ship_matrix import RsiShipMatrixSource
 from star_agent.ingestion.sources.star_citizen_wiki import (
+    CelestialObjectsSource,
     CommLinksSource,
     GalactapediaSource,
+    ItemsSource,
+    StarSystemsSource,
+    VehiclesSource,
 )
 from star_agent.rag.store import VectorStore
 
@@ -36,6 +40,10 @@ SOURCES = {
     RsiShipMatrixSource.name: RsiShipMatrixSource,
     GalactapediaSource.name: GalactapediaSource,
     CommLinksSource.name: CommLinksSource,
+    StarSystemsSource.name: StarSystemsSource,
+    CelestialObjectsSource.name: CelestialObjectsSource,
+    VehiclesSource.name: VehiclesSource,
+    ItemsSource.name: ItemsSource,
 }
 
 # Upsert in small batches so the embedding progress bar moves smoothly
