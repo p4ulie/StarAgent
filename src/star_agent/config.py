@@ -33,6 +33,14 @@ class Settings(BaseSettings):
     chroma_port: int = 8000
     chroma_collection: str = "star_citizen"
 
+    # --- Embeddings (optional external server) ---
+    # When set, embeddings are computed by an OpenAI-compatible /v1/embeddings
+    # endpoint (e.g. llama.cpp with an embedding GGUF) instead of the local
+    # MiniLM model. Switching embedders requires a full re-ingest into a fresh
+    # collection — see README "Faster ingestion".
+    embedding_base_url: str | None = None
+    embedding_model: str = "nomic-embed-text"
+
     # --- Ingestion ---
     ingest_user_agent: str = "StarAgent/0.1 (+https://github.com/p4ulie/StarAgent)"
     ingest_rate_delay: float = 1.0

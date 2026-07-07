@@ -26,7 +26,7 @@ class VectorStore:
         )
         self._collection = self._client.get_or_create_collection(
             name=settings.chroma_collection,
-            embedding_function=get_embedding_function(),
+            embedding_function=get_embedding_function(settings),
             metadata={"hnsw:space": "cosine"},
         )
 

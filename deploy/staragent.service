@@ -1,0 +1,25 @@
+# StarAgent systemd USER service — starts the docker compose stack at boot.
+# Installed by deploy/install-service.sh (which fills in WorkingDirectory).
+#
+# Manual control:
+#   systemctl --user start|stop|status staragent
+#   journalctl --user -u staragent
+
+[Unit]
+Description=StarAgent — Star Citizen Discord bot & MCP server (docker compose)
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+WorkingDirectory=__REPO_DIR__
+# Wait for the Docker daemon (a user unit cannot order itself after the
+# system-level docker.service).
+ExecStartPre=/bin/sh -c 'until docker info >/dev/null 2>&1; do sleep 2; done'
+ExecStart=__DOCKER__ compose up -d
+ExecStop=__DOCKER__ compose down
+TimeoutStartSec=300
+
+[Install]
+WantedBy=default.target
