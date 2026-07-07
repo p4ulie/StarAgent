@@ -8,36 +8,51 @@ embedding to an OpenAI-compatible ``/v1/embeddings`` server — e.g. llama.cpp
 running an embedding GGUF on a GPU box. Much faster for bulk ingestion.
 
 ⚠️ Whatever embeds at write time must embed at query time (same model, same
-dimensions) — switching embedders requires a fresh collection and a full
-re-ingest (see README).
+dimensions). Switching embedders requires a **fresh collection** (different
+``CHROMA_COLLECTION`` or a wiped ``chroma-data/``) and a full re-ingest — a
+collection stores its embedding function, and dimensions differ between models.
 """
 
 from __future__ import annotations
 
 import httpx
+from chromadb.api.types import Documents, EmbeddingFunction, Embeddings
 from chromadb.utils import embedding_functions
 
 from star_agent.config import Settings
 
 
-class OpenAICompatibleEmbeddingFunction:
-    """Minimal EF for OpenAI-compatible /v1/embeddings endpoints (llama.cpp)."""
+class OpenAICompatibleEmbeddingFunction(EmbeddingFunction[Documents]):
+    """Chroma embedding function backed by an OpenAI-compatible /v1 server."""
 
     def __init__(self, base_url: str, model: str, api_key: str | None = None) -> None:
-        self._url = base_url.rstrip("/") + "/embeddings"
+        self._base_url = base_url.rstrip("/")
         self._model = model
+        self._api_key = api_key
         headers = {"Authorization": f"Bearer {api_key}"} if api_key else None
         self._client = httpx.Client(timeout=120.0, headers=headers)
 
-    def __call__(self, input: list[str]) -> list[list[float]]:  # noqa: A002 — chroma EF protocol
+    def __call__(self, input: Documents) -> Embeddings:  # noqa: A002 — Chroma EF protocol
         resp = self._client.post(
-            self._url, json={"model": self._model, "input": input}
+            f"{self._base_url}/embeddings",
+            json={"model": self._model, "input": list(input)},
         )
         resp.raise_for_status()
         data = resp.json()["data"]
-        # API returns items with an "index" field; keep input order.
-        data.sort(key=lambda d: d["index"])
+        data.sort(key=lambda d: d["index"])  # preserve input order
         return [d["embedding"] for d in data]
+
+    @staticmethod
+    def name() -> str:
+        return "star_agent_openai_compatible"
+
+    def get_config(self) -> dict:
+        # The API key is a secret — never persist it in the collection config.
+        return {"base_url": self._base_url, "model": self._model}
+
+    @classmethod
+    def build_from_config(cls, config: dict) -> "OpenAICompatibleEmbeddingFunction":
+        return cls(base_url=config["base_url"], model=config["model"])
 
 
 def get_embedding_function(settings: Settings | None = None):
