@@ -179,8 +179,13 @@ the incremental hash-skip this is rarely a problem — but a from-scratch build 
 ~35 minutes. You can offload embedding to any **OpenAI-compatible `/v1/embeddings` server**,
 e.g. llama.cpp on a GPU machine, typically 10–50× faster:
 
-1. On your llama.cpp box, serve an embedding model, e.g.:
-   `llama-server -m nomic-embed-text-v1.5.Q8_0.gguf --embeddings --port 8081`
+1. On your llama.cpp box, serve an embedding model with a **large physical batch**
+   (`-ub`/`--ubatch-size` must be ≥ the longest chunk in tokens, or long chunks 500 with
+   *"input too large to process… increase the physical batch size"*):
+   ```
+   llama-server -m nomic-embed-text-v1.5.Q8_0.gguf --embeddings --port 8081 \
+     -c 8192 -b 8192 -ub 8192
+   ```
    (good GGUF choices: `nomic-embed-text-v1.5`, `bge-m3`, `snowflake-arctic-embed`)
 2. In `.env`, set `EMBEDDING_BASE_URL=http://<llm-host>:8081/v1` and
    `EMBEDDING_MODEL=<model name>`.

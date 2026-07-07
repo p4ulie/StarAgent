@@ -77,15 +77,27 @@ def _ingest_source(
     pending: list[Chunk] = []
     unchanged = 0
     total = 0
+    skipped = 0
 
     def flush() -> None:
+        nonlocal skipped
         if not pending:
             return
-        store.upsert(
-            ids=[c.id for c in pending],
-            documents=[c.text for c in pending],
-            metadatas=[c.metadata for c in pending],
-        )
+        try:
+            store.upsert(
+                ids=[c.id for c in pending],
+                documents=[c.text for c in pending],
+                metadatas=[c.metadata for c in pending],
+            )
+        except Exception:  # noqa: BLE001 — batch failed; isolate the offenders
+            # Retry chunk-by-chunk so one bad input (e.g. too long for the
+            # embedding server) doesn't drop the entire batch/source.
+            for c in pending:
+                try:
+                    store.upsert(ids=[c.id], documents=[c.text], metadatas=[c.metadata])
+                except Exception as exc:  # noqa: BLE001
+                    skipped += 1
+                    logger.warning("Skipped chunk %s: %s", c.id, str(exc)[:160])
         pending.clear()
 
     with tqdm(desc=f"[{source.name}] embed+upsert", unit="chunk") as bar:
@@ -109,7 +121,9 @@ def _ingest_source(
 
     if unchanged:
         print(f"[{source.name}] {unchanged} unchanged documents skipped")
-    return total
+    if skipped:
+        print(f"[{source.name}] {skipped} chunks FAILED to embed (see warnings)")
+    return total - skipped
 
 
 def build_index(
