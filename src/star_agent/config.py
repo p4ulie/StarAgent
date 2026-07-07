@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from functools import lru_cache
 
-from pydantic import Field
+from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -44,6 +44,16 @@ class Settings(BaseSettings):
     # --- Optional data-source keys (not needed for MVP) ---
     uex_api_token: str | None = None
     starcitizen_api_key: str | None = None
+
+    @field_validator(
+        "discord_guild_id", "uex_api_token", "starcitizen_api_key", mode="before"
+    )
+    @classmethod
+    def _blank_env_is_unset(cls, v: object) -> object:
+        """Treat empty strings (e.g. `DISCORD_GUILD_ID=` in .env) as unset."""
+        if isinstance(v, str) and not v.strip():
+            return None
+        return v
 
     def require_discord_token(self) -> str:
         """Return the Discord token or fail fast with a clear message."""
