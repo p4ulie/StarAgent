@@ -85,12 +85,52 @@ How to create the bot and add it to your server:
    commands: `/ask` (ask a Star Citizen question), `/health` (knowledge-base status), and
    `/reindex` (admins only — rebuild the knowledge base).
 
+## Ingestion — building & updating the knowledge base
+
+Ingestion is a **manual command**, safe to re-run anytime (documents have stable ids, so
+re-running updates in place — no duplicates). Run it after game patches to keep answers current.
+
+```bash
+# Ingest ALL registered sources (with per-source progress bars):
+docker compose run --rm bot star-agent-ingest
+
+# List the available sources and their default caps:
+docker compose run --rm bot star-agent-ingest --list
+
+# Ingest only specific sources (-s/--source is repeatable):
+docker compose run --rm bot star-agent-ingest --source rsi_ship_matrix
+docker compose run --rm bot star-agent-ingest -s galactapedia -s comm_links
+
+# Cap documents per source (0 = no cap) — handy for a quick test run:
+docker compose run --rm bot star-agent-ingest -s galactapedia --max-docs 50
+
+# Pull MORE news history than the default 300 most-recent Comm-Links:
+docker compose run --rm bot star-agent-ingest -s comm_links --max-docs 1000
+```
+
+(Without Docker: the same command is `star-agent-ingest ...`. Admins can also trigger a full
+run from Discord with `/reindex`.)
+
+### Registered sources and the URLs they pull
+
+Each source is a module in [`src/star_agent/ingestion/sources/`](src/star_agent/ingestion/sources/) —
+**that's where the ingested URLs are defined**. Currently registered:
+
+| Source name | Data | Endpoint it pulls | Module |
+|---|---|---|---|
+| `rsi_ship_matrix` | Official ship specs (~250 ships) | `https://robertsspaceindustries.com/ship-matrix/index` | [`rsi_ship_matrix.py`](src/star_agent/ingestion/sources/rsi_ship_matrix.py) |
+| `galactapedia` | Official lore (~1,500 articles) | `https://api.star-citizen.wiki/api/v2/galactapedia` | [`star_citizen_wiki.py`](src/star_agent/ingestion/sources/star_citizen_wiki.py) |
+| `comm_links` | Official news/patch notes (300 most recent by default, ~6,000 available) | `https://api.star-citizen.wiki/api/v2/comm-links` | [`star_citizen_wiki.py`](src/star_agent/ingestion/sources/star_citizen_wiki.py) |
+
+To add a new source: create a module there implementing `Source` (see `base.py`), then register
+it in the `SOURCES` dict in
+[`build_index.py`](src/star_agent/ingestion/build_index.py).
+
 ## Data sources
 
-The knowledge base is built by scraping/pulling from the sources below. The MVP ingests the
-**official RSI site** first; other sources are added incrementally. The full verified list —
-with URLs, access method (API vs. scraping), and terms/rate-limit notes — is in
-**[`docs/data-sources.md`](docs/data-sources.md)**.
+The knowledge base is built by scraping/pulling from the sources above. The full **catalog of
+candidate sources** — with URLs, access method (API vs. scraping), and terms/rate-limit notes —
+is in **[`docs/data-sources.md`](docs/data-sources.md)**.
 
 - **Official (CIG / RSI):** [Ship Matrix](https://robertsspaceindustries.com/ship-matrix),
   [Galactapedia](https://robertsspaceindustries.com/galactapedia),

@@ -31,7 +31,8 @@ class Source(Protocol):
     """A data source that yields documents for the knowledge base."""
 
     name: str
+    default_max_docs: int  # 0 = no cap
 
-    def __init__(self, http: HttpFetcher) -> None: ...
+    def __init__(self, http: HttpFetcher, max_docs: int | None = None) -> None: ...
 
     def fetch(self) -> Iterable[Document]: ...

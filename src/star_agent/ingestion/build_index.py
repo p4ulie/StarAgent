@@ -13,6 +13,7 @@ to :data:`SOURCES`.
 
 from __future__ import annotations
 
+import argparse
 import logging
 from datetime import datetime, timezone
 
@@ -22,12 +23,20 @@ from star_agent.config import Settings, get_settings
 from star_agent.ingestion.chunker import Chunk, chunk_document
 from star_agent.ingestion.loaders import HttpFetcher
 from star_agent.ingestion.sources.rsi_ship_matrix import RsiShipMatrixSource
+from star_agent.ingestion.sources.star_citizen_wiki import (
+    CommLinksSource,
+    GalactapediaSource,
+)
 from star_agent.rag.store import VectorStore
 
 logger = logging.getLogger(__name__)
 
-# Registered ingestion sources (MVP: RSI Ship Matrix). Order does not matter.
-SOURCES = [RsiShipMatrixSource]
+# Registered ingestion sources, keyed by CLI name.
+SOURCES = {
+    RsiShipMatrixSource.name: RsiShipMatrixSource,
+    GalactapediaSource.name: GalactapediaSource,
+    CommLinksSource.name: CommLinksSource,
+}
 
 # Upsert in small batches so the embedding progress bar moves smoothly
 # (embeddings are computed client-side inside upsert).
@@ -64,13 +73,24 @@ def _ingest_source(source, store: VectorStore, retrieved_at: str) -> int:
     return len(chunks)
 
 
-def build_index(settings: Settings | None = None) -> dict[str, int]:
-    """(Re)build the knowledge base from all registered sources.
+def build_index(
+    settings: Settings | None = None,
+    source_names: list[str] | None = None,
+    max_docs: int | None = None,
+) -> dict[str, int]:
+    """(Re)build the knowledge base from the selected sources.
 
+    ``source_names`` selects which registered sources run (default: all).
+    ``max_docs`` caps documents per source (default: each source's own cap).
     Returns a mapping of source name -> number of chunks upserted. A failing
     source is logged and skipped so one bad source can't abort the whole build.
     """
     settings = settings or get_settings()
+    selected = source_names or list(SOURCES)
+    unknown = [n for n in selected if n not in SOURCES]
+    if unknown:
+        raise ValueError(f"Unknown source(s): {unknown}. Available: {list(SOURCES)}")
+
     print("Connecting to ChromaDB and loading the embedding model "
           "(first run downloads it — may take a minute)...")
     store = VectorStore(settings)
@@ -78,23 +98,55 @@ def build_index(settings: Settings | None = None) -> dict[str, int]:
     results: dict[str, int] = {}
 
     with HttpFetcher(settings) as http:
-        for source_cls in SOURCES:
-            source = source_cls(http)
+        for name in selected:
+            source = SOURCES[name](http, max_docs=max_docs)
             try:
-                results[source.name] = _ingest_source(source, store, retrieved_at)
+                results[name] = _ingest_source(source, store, retrieved_at)
             except Exception:  # noqa: BLE001 — one source must not abort the build
-                logger.exception("Source %r failed; skipping", source.name)
-                results[source.name] = 0
+                logger.exception("Source %r failed; skipping", name)
+                results[name] = 0
 
     return results
 
 
 def main() -> None:
+    parser = argparse.ArgumentParser(
+        prog="star-agent-ingest",
+        description="(Re)build the Star Citizen knowledge base.",
+    )
+    parser.add_argument(
+        "--source",
+        "-s",
+        action="append",
+        choices=sorted(SOURCES),
+        help="Source to ingest (repeatable). Default: all sources.",
+    )
+    parser.add_argument(
+        "--max-docs",
+        type=int,
+        default=None,
+        metavar="N",
+        help="Cap documents per source; 0 = no cap. "
+        "Default: each source's own cap (comm_links: 300, others: unlimited).",
+    )
+    parser.add_argument(
+        "--list", action="store_true", help="List available sources and exit."
+    )
+    args = parser.parse_args()
+
+    if args.list:
+        print("Available sources:")
+        for name, cls in sorted(SOURCES.items()):
+            cap = getattr(cls, "default_max_docs", 0)
+            cap_note = f"default cap: {cap} docs" if cap else "no default cap"
+            print(f"  {name:<18} {cap_note}")
+        return
+
     logging.basicConfig(
         level=logging.WARNING,  # keep the console clean for the progress bars
         format="%(asctime)s %(levelname)s %(name)s: %(message)s",
     )
-    results = build_index()
+    results = build_index(source_names=args.source, max_docs=args.max_docs)
     store = VectorStore(get_settings())
     print("\nIngestion complete:")
     for name, n in results.items():

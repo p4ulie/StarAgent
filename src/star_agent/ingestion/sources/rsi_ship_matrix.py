@@ -88,9 +88,11 @@ class RsiShipMatrixSource:
     """Yields one document per ship in the official RSI Ship Matrix."""
 
     name = "rsi_ship_matrix"
+    default_max_docs = 0  # no cap — a single JSON payload of ~250 ships
 
-    def __init__(self, http: HttpFetcher) -> None:
+    def __init__(self, http: HttpFetcher, max_docs: int | None = None) -> None:
         self._http = http
+        self._max_docs = self.default_max_docs if max_docs is None else max_docs
 
     def fetch(self) -> Iterable[Document]:
         payload = self._http.get_json(_SHIP_MATRIX_URL)
@@ -107,4 +109,6 @@ class RsiShipMatrixSource:
             if doc is not None:
                 count += 1
                 yield doc
+                if self._max_docs and count >= self._max_docs:
+                    break
         logger.info("RSI Ship Matrix: produced %d ship documents", count)
