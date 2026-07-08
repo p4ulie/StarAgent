@@ -60,52 +60,60 @@ def _fmt(v: object, unit: str = "aUEC") -> str:
         return str(v)
 
 
-async def get_ship_buy_and_rent_locations(ship_name: str) -> dict:
-    """Find where to BUY and RENT a ship in-game, with current aUEC prices.
-
-    Use for questions like "where can I buy/rent the Cutlass Black" or "how
-    much to rent an Avenger". Matches ship names loosely (e.g. "Cutlass"
-    returns all Cutlass variants).
-
-    Args:
-        ship_name: The ship/vehicle name or part of it.
-
-    Returns:
-        Per matching ship: cheapest buy terminals and cheapest rent terminals.
-    """
+async def _ship_locations(ship_name: str, endpoint: str, price_key: str, mode: str) -> dict:
     if _client is None:
         return {"status": "error", "error": "UEX is not configured."}
     try:
-        buys = await _client.get("vehicles_purchases_prices_all")
-        rents = await _client.get("vehicles_rentals_prices_all")
+        rows = await _client.get(endpoint)
     except Exception as exc:  # noqa: BLE001
         logger.exception("UEX lookup failed")
         return {"status": "error", "error": f"UEX request failed: {exc}"}
 
     q = ship_name.lower().strip()
-    ships: dict[str, dict] = {}
-    for r in buys:
+    ships: dict[str, list[dict]] = {}
+    for r in rows:
         name = str(r.get("vehicle_name") or "")
-        if q in name.lower() and r.get("price_buy"):
-            ships.setdefault(name, {"buy": [], "rent": []})["buy"].append(r)
-    for r in rents:
-        name = str(r.get("vehicle_name") or "")
-        if q in name.lower() and r.get("price_rent"):
-            ships.setdefault(name, {"buy": [], "rent": []})["rent"].append(r)
+        if q in name.lower() and r.get(price_key):
+            ships.setdefault(name, []).append(r)
     if not ships:
-        return {"status": "not_found", "ship_name": ship_name}
+        return {"status": "not_found", "mode": mode, "ship_name": ship_name}
 
     results = []
-    for name, data in sorted(ships.items()):
-        buy = sorted(data["buy"], key=lambda r: r["price_buy"])
-        rent = sorted(data["rent"], key=lambda r: r["price_rent"])
+    for name, recs in sorted(ships.items()):
+        recs = sorted(recs, key=lambda r: r[price_key])
         results.append({
             "ship": name,
-            "buy": [{"terminal": r.get("terminal_name"), "price": _fmt(r["price_buy"])} for r in buy],
-            "rent": [{"terminal": r.get("terminal_name"), "price": _fmt(r["price_rent"])} for r in rent],
+            "locations": [
+                {"terminal": r.get("terminal_name"), "price": _fmt(r[price_key])} for r in recs
+            ],
         })
-    return {"status": "success", "results": results,
+    return {"status": "success", "mode": mode, "results": results,
             "note": "Community-reported via UEX; changes with game patches."}
+
+
+async def get_ship_rental_locations(ship_name: str) -> dict:
+    """Find where to RENT a ship in-game, with rental prices (aUEC).
+
+    Use ONLY for rental questions ("where can I rent the Cutlass Black", "rent
+    an Avenger"). For buying, use get_ship_purchase_locations instead. Matches
+    ship names loosely (e.g. "Cutlass" returns all Cutlass variants).
+
+    Args:
+        ship_name: The ship/vehicle name or part of it.
+    """
+    return await _ship_locations(ship_name, "vehicles_rentals_prices_all", "price_rent", "rent")
+
+
+async def get_ship_purchase_locations(ship_name: str) -> dict:
+    """Find where to BUY a ship in-game, with purchase prices (aUEC).
+
+    Use ONLY for buying questions ("where can I buy the Cutlass Black"). For
+    renting, use get_ship_rental_locations instead. Matches ship names loosely.
+
+    Args:
+        ship_name: The ship/vehicle name or part of it.
+    """
+    return await _ship_locations(ship_name, "vehicles_purchases_prices_all", "price_buy", "buy")
 
 
 async def list_rentable_ships() -> dict:
@@ -139,6 +147,55 @@ async def list_rentable_ships() -> dict:
         "ships": ships,
         "note": "Cheapest rental location per ship; community-reported via UEX.",
     }
+
+
+async def get_item_purchase_locations(item_name: str) -> dict:
+    """Find where to BUY an item in-game, with prices (aUEC).
+
+    Covers weapons/guns, armor, clothing, and ship components (shields,
+    coolers, quantum drives, etc.). Use for "where can I buy the P4-AR",
+    "where to buy [armor/gun/component]". Matches names loosely.
+
+    Args:
+        item_name: The item name or part of it.
+    """
+    if _client is None:
+        return {"status": "error", "error": "UEX is not configured."}
+    try:
+        rows = await _client.get("items_prices_all")
+    except Exception as exc:  # noqa: BLE001
+        logger.exception("UEX lookup failed")
+        return {"status": "error", "error": f"UEX request failed: {exc}"}
+
+    q = item_name.lower().strip()
+    items: dict[str, list[dict]] = {}
+    for r in rows:
+        name = str(r.get("item_name") or "")
+        if q in name.lower() and r.get("price_buy"):
+            items.setdefault(name, []).append(r)
+    if not items:
+        return {"status": "not_found", "item_name": item_name}
+    # A broad query (e.g. "armor") can match hundreds of items — return just
+    # the names so the user can narrow, rather than a giant dump.
+    if len(items) > 12:
+        return {
+            "status": "too_many",
+            "item_name": item_name,
+            "match_count": len(items),
+            "matching_items": sorted(items)[:60],
+            "note": "Many items match — ask about a more specific item name.",
+        }
+    results = []
+    for name, recs in sorted(items.items()):
+        recs = sorted(recs, key=lambda r: r["price_buy"])
+        results.append({
+            "item": name,
+            "locations": [
+                {"terminal": r.get("terminal_name"), "price": _fmt(r["price_buy"])} for r in recs
+            ],
+        })
+    return {"status": "success", "results": results,
+            "note": "Community-reported via UEX; changes with game patches."}
 
 
 async def get_commodity_trade_prices(commodity_name: str) -> dict:
@@ -209,8 +266,10 @@ async def find_trade_routes_from(origin: str) -> dict:
 
 
 ALL_TOOLS = [
-    get_ship_buy_and_rent_locations,
+    get_ship_rental_locations,
+    get_ship_purchase_locations,
     list_rentable_ships,
+    get_item_purchase_locations,
     get_commodity_trade_prices,
     find_trade_routes_from,
 ]
