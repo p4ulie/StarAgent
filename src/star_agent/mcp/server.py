@@ -15,6 +15,7 @@ import logging
 
 from mcp.server.fastmcp import FastMCP
 
+from star_agent.agent import uex_tools
 from star_agent.agent.service import AgentService
 from star_agent.config import Settings, get_settings
 from star_agent.rag.retriever import Retriever
@@ -28,8 +29,14 @@ def build_server(settings: Settings | None = None) -> FastMCP:
     store = VectorStore(settings)
     retriever = Retriever(store)
     agent_service = AgentService(settings, retriever)
+    uex_tools.configure(settings.uex_api_token)
 
     server = FastMCP("StarAgent", host=settings.mcp_host, port=settings.mcp_port)
+
+    # Expose the live UEX trade tools (prices, rentals, routes, ship lists)
+    # directly — same functions the agent uses.
+    for fn in uex_tools.ALL_TOOLS:
+        server.add_tool(fn)
 
     @server.tool()
     async def search_star_citizen_kb(query: str) -> str:
