@@ -451,6 +451,100 @@ async def find_trade_routes_from(origin: str) -> dict:
     }
 
 
+_FACILITIES = {
+    "has_clinic": "clinic", "has_food": "food", "has_refuel": "refuel",
+    "has_refinery": "refinery", "has_habitation": "habitation",
+    "has_cargo_center": "cargo center", "has_docking_port": "docking",
+    "has_loading_dock": "loading dock", "has_freight_elevator": "freight elevator",
+}
+
+
+def _services(rec: dict) -> list[str]:
+    return [label for flag, label in _FACILITIES.items() if rec.get(flag)]
+
+
+def _where(rec: dict, systems: dict, planets: dict, moons: dict) -> str:
+    parts = [moons.get(rec.get("id_moon")), planets.get(rec.get("id_planet"))]
+    sysname = systems.get(rec.get("id_star_system"))
+    if sysname:
+        parts.append(f"{sysname} system")
+    return ", ".join(p for p in parts if p)
+
+
+async def find_location(name: str) -> dict:
+    """Look up a location by name — system, planet, moon, station, city, outpost,
+    or settlement (e.g. "Shepherd's Rest", "Lorville", "Daymar").
+
+    Returns what it is, where it is, and (for outposts/settlements) which
+    services it has. Matches names loosely.
+
+    Args:
+        name: The location name or part of it.
+    """
+    if _client is None:
+        return {"status": "error", "error": "UEX is not configured."}
+    try:
+        systems = {s["id"]: s.get("name") for s in await _client.get("star_systems")}
+        planets = {p["id"]: p.get("name") for p in await _client.get("planets")}
+        moons = {m["id"]: m.get("name") for m in await _client.get("moons")}
+        sources = [
+            ("star system", "star_systems"), ("planet", "planets"), ("moon", "moons"),
+            ("station", "space_stations"), ("city", "cities"),
+            ("outpost/settlement", "outposts"), ("point of interest", "poi"),
+        ]
+        q = name.lower().strip()
+        results = []
+        for kind, ep in sources:
+            for rec in await _client.get(ep):
+                nm = str(rec.get("name") or "")
+                if nm and q in nm.lower():
+                    entry = {"name": nm, "type": kind,
+                             "where": _where(rec, systems, planets, moons)}
+                    if svc := _services(rec):
+                        entry["services"] = svc
+                    if rec.get("faction_name"):
+                        entry["faction"] = rec["faction_name"]
+                    results.append(entry)
+    except Exception as exc:  # noqa: BLE001
+        return {"status": "error", "error": f"UEX request failed: {exc}"}
+    if not results:
+        return {"status": "not_found", "name": name}
+    return {"status": "success", "count": len(results),
+            "locations": results[:_SHIP_LIST_CAP], "note": "From UEX."}
+
+
+async def list_settlements_on(body: str) -> dict:
+    """List settlements/outposts on a planet or moon, with their services.
+
+    Use for "settlements on Hurston", "outposts on Daymar", "what's on
+    microTech". Matches the planet/moon name loosely.
+
+    Args:
+        body: The planet or moon name.
+    """
+    if _client is None:
+        return {"status": "error", "error": "UEX is not configured."}
+    try:
+        planets = await _client.get("planets")
+        moons = await _client.get("moons")
+        outposts = await _client.get("outposts")
+    except Exception as exc:  # noqa: BLE001
+        return {"status": "error", "error": f"UEX request failed: {exc}"}
+    q = body.lower().strip()
+    moon = next((m for m in moons if q in str(m.get("name") or "").lower()), None)
+    planet = next((p for p in planets if q in str(p.get("name") or "").lower()), None)
+    target, key = (moon, "id_moon") if moon else (planet, "id_planet")
+    if not target:
+        return {"status": "not_found", "body": body}
+    found = [o for o in outposts if o.get(key) == target["id"]]
+    settlements = [
+        {"name": o.get("name"), "services": _services(o), "faction": o.get("faction_name")}
+        for o in found
+    ]
+    return {"status": "success", "body": target.get("name"),
+            "count": len(settlements), "settlements": settlements, "note": "From UEX."}
+
+
 ALL_TOOLS = [
     get_ship_specifications,
     list_ships_by_cargo,
@@ -462,4 +556,6 @@ ALL_TOOLS = [
     get_item_purchase_locations,
     get_commodity_trade_prices,
     find_trade_routes_from,
+    find_location,
+    list_settlements_on,
 ]

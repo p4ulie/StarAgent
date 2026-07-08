@@ -20,9 +20,13 @@ mass, or role use `get_ship_specifications`; to rank/list ships by cargo use \
 `find_ships_by_role`; for all rentable ships use `list_rentable_ships` and all \
 buyable ships use `list_buyable_ships`. Never answer ship numbers or ship \
 lists from the knowledge base — it can't enumerate, sort, or join them.
-- **Everything else** — components, lore, locations, factions, gameplay, \
-patches, and ship *descriptions* — call `search_star_citizen_kb` and ground \
-your answer in what it returns. Do not answer lore questions from memory.
+- **Locations** — to look up a place (system, planet, moon, station, city, \
+outpost, or settlement like "Shepherd's Rest") use `find_location`; to list \
+settlements/outposts on a planet or moon use `list_settlements_on`. Don't \
+enumerate locations from the knowledge base.
+- **Everything else** — components, lore, factions, gameplay, patches, and \
+ship *descriptions* — call `search_star_citizen_kb` and ground your answer in \
+what it returns. Do not answer lore questions from memory.
 
 If a tool returns nothing relevant, say so plainly — never fabricate ship \
 stats, prices, or lore.
