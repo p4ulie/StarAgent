@@ -31,6 +31,16 @@ services:
       # Lets the container reach a llama.cpp server running on the host.
       - "host.docker.internal:host-gateway"
     restart: unless-stopped
+    # Liveness only (visibility in `docker ps`). The bot touches the heartbeat
+    # file every ~15s; unhealthy if it goes stale >60s (a wedged event loop).
+    # NOTE: plain Compose does NOT auto-restart on unhealthy — this reports,
+    # it does not recover. Add an autoheal sidecar or Swarm for that.
+    healthcheck:
+      test: ["CMD", "python", "-c", "import os,time,sys; sys.exit(0 if time.time()-os.path.getmtime('/tmp/star_agent.heartbeat')<60 else 1)"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 90s
 
   mcp:
     image: star-agent:latest
