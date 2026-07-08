@@ -149,6 +149,87 @@ async def list_rentable_ships() -> dict:
     }
 
 
+_ROLE_FLAGS = {
+    "is_cargo": "cargo", "is_mining": "mining", "is_salvage": "salvage",
+    "is_military": "military", "is_exploration": "exploration", "is_medical": "medical",
+    "is_racing": "racing", "is_stealth": "stealth", "is_refuel": "refueling",
+    "is_repair": "repair", "is_passenger": "passenger", "is_industrial": "industrial",
+    "is_interdiction": "interdiction", "is_ground_vehicle": "ground vehicle",
+    "is_starter": "starter", "is_science": "science", "is_construction": "construction",
+    "is_refinery": "refinery", "is_bomber": "bomber", "is_datarunner": "data running",
+}
+_SHIP_LIST_CAP = 60
+
+
+def _ship_roles(v: dict) -> list[str]:
+    return [label for flag, label in _ROLE_FLAGS.items() if v.get(flag)]
+
+
+async def get_ship_specifications(ship_name: str) -> dict:
+    """Get a ship's specifications: cargo (SCU), crew, size, mass, roles.
+
+    Use for "what's the cargo capacity of the Freelancer", "how big is the
+    Carrack", "specs for the Cutlass". Matches names loosely.
+
+    Args:
+        ship_name: The ship/vehicle name or part of it.
+    """
+    if _client is None:
+        return {"status": "error", "error": "UEX is not configured."}
+    try:
+        vehicles = await _client.get("vehicles")
+    except Exception as exc:  # noqa: BLE001
+        return {"status": "error", "error": f"UEX request failed: {exc}"}
+    q = ship_name.lower().strip()
+    matches = [v for v in vehicles if q in str(v.get("name") or "").lower()]
+    if not matches:
+        return {"status": "not_found", "ship_name": ship_name}
+    ships = [{
+        "ship": v.get("name"),
+        "manufacturer": v.get("company_name"),
+        "cargo_scu": v.get("scu"),
+        "crew": v.get("crew"),
+        "mass_kg": v.get("mass"),
+        "size_m": {"length": v.get("length"), "width": v.get("width"), "height": v.get("height")},
+        "roles": _ship_roles(v),
+        "quantum_capable": bool(v.get("is_quantum_capable")),
+    } for v in matches[:_SHIP_LIST_CAP]]
+    return {"status": "success", "ships": ships,
+            "note": "From UEX (game-file data); tracks the live game version."}
+
+
+async def list_ships_by_cargo(min_scu: int = 0) -> dict:
+    """List ships by cargo capacity (SCU), largest first.
+
+    Use for "which ships carry the most cargo", "list ships by cargo",
+    "cargo ships over 100 SCU". Optionally filter to ships with at least
+    ``min_scu`` cargo. Returns the top ships by capacity.
+
+    Args:
+        min_scu: Minimum cargo capacity in SCU (0 = no minimum).
+    """
+    if _client is None:
+        return {"status": "error", "error": "UEX is not configured."}
+    try:
+        vehicles = await _client.get("vehicles")
+    except Exception as exc:  # noqa: BLE001
+        return {"status": "error", "error": f"UEX request failed: {exc}"}
+    ships = []
+    for v in vehicles:
+        scu = v.get("scu")
+        if scu and scu >= min_scu:
+            ships.append({"ship": v.get("name"), "cargo_scu": scu,
+                          "manufacturer": v.get("company_name")})
+    ships.sort(key=lambda s: s["cargo_scu"], reverse=True)
+    total = len(ships)
+    shown = ships[:_SHIP_LIST_CAP]
+    result = {"status": "success", "count": total, "ships": shown,
+              "note": "Cargo in SCU, from UEX game-file data."}
+    if total > len(shown):
+        result["truncated"] = f"Showing the {len(shown)} largest of {total}; raise min_scu to narrow."
+    return result
+
+
 async def get_item_purchase_locations(item_name: str) -> dict:
     """Find where to BUY an item in-game, with prices (aUEC).
 
@@ -266,6 +347,8 @@ async def find_trade_routes_from(origin: str) -> dict:
 
 
 ALL_TOOLS = [
+    get_ship_specifications,
+    list_ships_by_cargo,
     get_ship_rental_locations,
     get_ship_purchase_locations,
     list_rentable_ships,
