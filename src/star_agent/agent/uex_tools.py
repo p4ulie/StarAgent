@@ -97,8 +97,8 @@ async def get_ship_buy_and_rent_locations(ship_name: str) -> dict:
 
     results = []
     for name, data in sorted(ships.items()):
-        buy = sorted(data["buy"], key=lambda r: r["price_buy"])[:5]
-        rent = sorted(data["rent"], key=lambda r: r["price_rent"])[:5]
+        buy = sorted(data["buy"], key=lambda r: r["price_buy"])
+        rent = sorted(data["rent"], key=lambda r: r["price_rent"])
         results.append({
             "ship": name,
             "buy": [{"terminal": r.get("terminal_name"), "price": _fmt(r["price_buy"])} for r in buy],
@@ -109,10 +109,11 @@ async def get_ship_buy_and_rent_locations(ship_name: str) -> dict:
 
 
 async def list_rentable_ships() -> dict:
-    """List every ship that can currently be rented in-game (via UEX).
+    """List EVERY rentable ship with its cheapest rental price and location.
 
-    Use for "what ships can I rent", "list all rentable ships". Returns the
-    complete list, not a sample.
+    Use for "what ships can I rent", "list all rentable ships", "cheapest
+    ships to rent". Returns the COMPLETE list in one call — every entry has a
+    price, so present all of them; do not sample or omit any.
     """
     if _client is None:
         return {"status": "error", "error": "UEX is not configured."}
@@ -120,8 +121,24 @@ async def list_rentable_ships() -> dict:
         rents = await _client.get("vehicles_rentals_prices_all")
     except Exception as exc:  # noqa: BLE001
         return {"status": "error", "error": f"UEX request failed: {exc}"}
-    names = sorted({str(r.get("vehicle_name")) for r in rents if r.get("price_rent") and r.get("vehicle_name")})
-    return {"status": "success", "count": len(names), "ships": names}
+    cheapest: dict[str, dict] = {}
+    for r in rents:
+        name = str(r.get("vehicle_name") or "")
+        price = r.get("price_rent")
+        if not name or not price:
+            continue
+        if name not in cheapest or price < cheapest[name]["_price"]:
+            cheapest[name] = {"_price": price, "terminal": r.get("terminal_name")}
+    ships = [
+        {"ship": name, "cheapest_rent": _fmt(v["_price"]), "location": v["terminal"]}
+        for name, v in sorted(cheapest.items())
+    ]
+    return {
+        "status": "success",
+        "count": len(ships),
+        "ships": ships,
+        "note": "Cheapest rental location per ship; community-reported via UEX.",
+    }
 
 
 async def get_commodity_trade_prices(commodity_name: str) -> dict:
