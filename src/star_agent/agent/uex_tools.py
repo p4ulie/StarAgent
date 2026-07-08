@@ -416,12 +416,18 @@ async def get_commodity_trade_prices(commodity_name: str) -> dict:
 
 def _fmt_route(r: dict) -> dict:
     dest = r.get("destination_planet_name") or r.get("destination_star_system_name")
+    buy, sell = r.get("price_origin"), r.get("price_destination")
+    per_scu = sell - buy if buy is not None and sell is not None else None
     return {
         "commodity": r.get("commodity_name"),
         "buy_at": r.get("origin_terminal_name"),
         "sell_at": f"{r.get('destination_terminal_name')} ({dest})",
-        "profit_per_scu": _fmt(r.get("profit")),
-        "roi_percent": r.get("price_roi"),
+        "buy_price": _fmt(buy, "aUEC/SCU"),
+        "sell_price": _fmt(sell, "aUEC/SCU"),
+        "profit_per_scu": _fmt(per_scu, "aUEC/SCU"),
+        "roi_percent": round(r["price_roi"], 1) if r.get("price_roi") is not None else None,
+        "max_stock_scu": r.get("scu_origin"),
+        "max_profit_full_haul": _fmt(r.get("profit")),
     }
 
 
