@@ -37,7 +37,7 @@ class AgentService:
         retriever: Retriever,
         max_concurrency: int = 4,
     ) -> None:
-        tools.configure(retriever)
+        tools.configure(retriever, settings.rag_results)
         uex_tools.configure(settings.uex_api_token)
         self._settings = settings
         self._agent = LlmAgent(

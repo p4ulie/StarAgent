@@ -45,7 +45,7 @@ def build_server(settings: Settings | None = None) -> FastMCP:
         Returns the most relevant passages with their source titles and URLs.
         Use for ships, components, locations, lore, factions, and gameplay.
         """
-        chunks = await asyncio.to_thread(retriever.retrieve, query, 5)
+        chunks = await asyncio.to_thread(retriever.retrieve, query, settings.rag_results)
         return Retriever.format_context(chunks)
 
     @server.tool()

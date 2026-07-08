@@ -15,12 +15,14 @@ from star_agent.rag.retriever import Retriever
 logger = logging.getLogger(__name__)
 
 _retriever: Retriever | None = None
+_n_results: int = 5
 
 
-def configure(retriever: Retriever) -> None:
+def configure(retriever: Retriever, n_results: int = 5) -> None:
     """Wire the shared retriever the tool will use. Called once at startup."""
-    global _retriever
+    global _retriever, _n_results
     _retriever = retriever
+    _n_results = n_results
 
 
 async def search_star_citizen_kb(query: str) -> dict:

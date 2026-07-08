@@ -32,6 +32,42 @@ def _render_table(rows: list[str]) -> str:
     return "```\n" + "\n".join(lines) + "\n```"
 
 
+def _split_for_discord(text: str, limit: int = 1990) -> list[str]:
+    """Split text into <=limit-char messages, keeping code blocks balanced."""
+    chunks: list[str] = []
+    cur: list[str] = []
+    cur_len = 0
+    in_code = False
+
+    def flush() -> None:
+        nonlocal cur, cur_len
+        if not cur:
+            return
+        body = "\n".join(cur)
+        if in_code:
+            body += "\n```"  # close an open fence so the message is valid
+        chunks.append(body)
+        cur, cur_len = [], 0
+
+    for raw in text.split("\n"):
+        # Hard-wrap a pathologically long single line.
+        for line in ([raw] if len(raw) <= limit else
+                     [raw[i:i + limit] for i in range(0, len(raw), limit)]):
+            reserve = 4 if in_code else 0
+            if cur and cur_len + len(line) + 1 + reserve > limit:
+                reopen = in_code
+                flush()
+                if reopen:
+                    cur.append("```")
+                    cur_len += 4
+            cur.append(line)
+            cur_len += len(line) + 1
+            if line.lstrip().startswith("```"):
+                in_code = not in_code
+    flush()
+    return chunks or [""]
+
+
 def _tables_to_code_blocks(text: str) -> str:
     """Convert markdown tables to code blocks — Discord can't render tables."""
     lines = text.split("\n")
@@ -86,9 +122,13 @@ class AskCog(commands.Cog):
             answer = "Sorry — something went wrong answering that. Please try again."
 
         answer = _tables_to_code_blocks(answer.strip()) or "I couldn't find an answer to that."
-        if len(answer) > _DISCORD_MSG_LIMIT:
-            answer = answer[: _DISCORD_MSG_LIMIT - 1] + "…"
-        await interaction.followup.send(answer)
+        parts = _split_for_discord(answer)
+        # Cap at a few messages so a runaway answer can't spam the channel.
+        if len(parts) > 5:
+            parts = parts[:5]
+            parts[-1] += "\n… (truncated)"
+        for part in parts:
+            await interaction.followup.send(part)
 
 
 async def setup(bot: commands.Bot) -> None:

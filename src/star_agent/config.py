@@ -49,6 +49,10 @@ class Settings(BaseSettings):
     # bge) can use 1500+.
     chunk_max_chars: int = 1000
     chunk_overlap: int = 150
+    # Number of chunks the RAG retriever returns per query. More = richer lore
+    # context (also more tokens/latency/noise). Does not affect enumeration —
+    # list/sort questions are served by structured tools, not RAG.
+    rag_results: int = 5
 
     # --- Ingestion ---
     ingest_user_agent: str = "StarAgent/0.1 (+https://github.com/p4ulie/StarAgent)"
