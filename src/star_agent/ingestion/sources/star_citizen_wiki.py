@@ -291,7 +291,10 @@ class CommLinksSource:
     """
 
     name = "comm_links"
-    default_max_docs = 10000  # effectively all posts (~6,000 available)
+    default_max_docs = 1000  # newest posts only when opted in
+    # Opt-in: comm-links are mostly ephemeral news/patch notes that dilute
+    # retrieval. Run explicitly with `star-agent-ingest --source comm_links`.
+    enabled_by_default = False
 
     def __init__(self, http: HttpFetcher, max_docs: int | None = None) -> None:
         self._http = http

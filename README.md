@@ -118,7 +118,9 @@ docker compose run --rm bot star-agent-ingest --list
 
 # Ingest only specific sources (-s/--source is repeatable):
 docker compose run --rm bot star-agent-ingest --source rsi_ship_matrix
-docker compose run --rm bot star-agent-ingest -s galactapedia -s comm_links
+
+# Opt-in sources (e.g. comm_links news/patch notes) run only when named:
+docker compose run --rm bot star-agent-ingest -s comm_links --max-docs 500
 
 # Cap documents per source (0 = no cap) — handy for a quick test run:
 docker compose run --rm bot star-agent-ingest -s galactapedia --max-docs 50
@@ -159,7 +161,7 @@ Each source is a module in [`src/star_agent/ingestion/sources/`](src/star_agent/
 |---|---|---|---|
 | `rsi_ship_matrix` | Official ship specs (~250 ships) | `https://robertsspaceindustries.com/ship-matrix/index` | [`rsi_ship_matrix.py`](src/star_agent/ingestion/sources/rsi_ship_matrix.py) |
 | `galactapedia` | Official lore (~1,500 articles) | `https://api.star-citizen.wiki/api/v2/galactapedia` | [`star_citizen_wiki.py`](src/star_agent/ingestion/sources/star_citizen_wiki.py) |
-| `comm_links` | Official news/patch notes (all ~6,000 posts) | `https://api.star-citizen.wiki/api/v2/comm-links` | [`star_citizen_wiki.py`](src/star_agent/ingestion/sources/star_citizen_wiki.py) |
+| `comm_links` | Official news/patch notes (newest posts; **opt-in** — mostly ephemeral, dilutes retrieval) | `https://api.star-citizen.wiki/api/v2/comm-links` | [`star_citizen_wiki.py`](src/star_agent/ingestion/sources/star_citizen_wiki.py) |
 | `starsystems` | Star systems with lore descriptions (~100) | `https://api.star-citizen.wiki/api/v2/starsystems` | [`star_citizen_wiki.py`](src/star_agent/ingestion/sources/star_citizen_wiki.py) |
 | `celestial_objects` | Planets, moons & stations with lore (~1,700, described only) | `https://api.star-citizen.wiki/api/v2/celestial-objects` | [`star_citizen_wiki.py`](src/star_agent/ingestion/sources/star_citizen_wiki.py) |
 | `vehicles` | In-game vehicle stats + descriptions from game files (~290) | `https://api.star-citizen.wiki/api/v2/vehicles` | [`star_citizen_wiki.py`](src/star_agent/ingestion/sources/star_citizen_wiki.py) |

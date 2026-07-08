@@ -143,7 +143,11 @@ def build_index(
     source is logged and skipped so one bad source can't abort the whole build.
     """
     settings = settings or get_settings()
-    selected = source_names or list(SOURCES)
+    # No --source given: run only the default-enabled sources (opt-in sources
+    # like comm_links must be named explicitly).
+    selected = source_names or [
+        n for n, cls in SOURCES.items() if getattr(cls, "enabled_by_default", True)
+    ]
     unknown = [n for n in selected if n not in SOURCES]
     if unknown:
         raise ValueError(f"Unknown source(s): {unknown}. Available: {list(SOURCES)}")
@@ -208,11 +212,12 @@ def main() -> None:
     args = parser.parse_args()
 
     if args.list:
-        print("Available sources:")
+        print("Available sources (default run = all except opt-in):")
         for name, cls in sorted(SOURCES.items()):
             cap = getattr(cls, "default_max_docs", 0)
-            cap_note = f"default cap: {cap} docs" if cap else "no default cap"
-            print(f"  {name:<18} {cap_note}")
+            cap_note = f"cap {cap}" if cap else "no cap"
+            tag = "" if getattr(cls, "enabled_by_default", True) else "  [opt-in: --source " + name + "]"
+            print(f"  {name:<18} {cap_note}{tag}")
         return
 
     logging.basicConfig(

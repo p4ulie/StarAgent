@@ -32,6 +32,7 @@ class Source(Protocol):
 
     name: str
     default_max_docs: int  # 0 = no cap
+    enabled_by_default: bool  # if False, only runs when named explicitly (--source)
 
     def __init__(self, http: HttpFetcher, max_docs: int | None = None) -> None: ...
 
