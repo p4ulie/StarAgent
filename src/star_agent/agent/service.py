@@ -17,7 +17,7 @@ from google.adk.runners import Runner
 from google.adk.sessions import InMemorySessionService
 from google.genai import types
 
-from star_agent.agent import tools
+from star_agent.agent import tools, uex_tools
 from star_agent.agent.prompts import SYSTEM_INSTRUCTION
 from star_agent.config import Settings, get_settings
 from star_agent.rag.retriever import Retriever
@@ -38,6 +38,7 @@ class AgentService:
         max_concurrency: int = 4,
     ) -> None:
         tools.configure(retriever)
+        uex_tools.configure(settings.uex_api_token)
         self._settings = settings
         self._agent = LlmAgent(
             name="star_agent",
@@ -50,7 +51,7 @@ class AgentService:
                 api_key=settings.llm_api_key or "sk-none",
             ),
             instruction=SYSTEM_INSTRUCTION,
-            tools=[tools.search_star_citizen_kb],
+            tools=[tools.search_star_citizen_kb, *uex_tools.ALL_TOOLS],
         )
         self._session_service = InMemorySessionService()
         self._runner = Runner(

@@ -31,11 +31,6 @@ from star_agent.ingestion.sources.star_citizen_wiki import (
     StarSystemsSource,
     VehiclesSource,
 )
-from star_agent.ingestion.sources.uex import (
-    UexCommoditiesSource,
-    UexTradeRoutesSource,
-    UexVehiclePricesSource,
-)
 from star_agent.rag.store import VectorStore
 
 logger = logging.getLogger(__name__)
@@ -49,9 +44,8 @@ SOURCES = {
     CelestialObjectsSource.name: CelestialObjectsSource,
     VehiclesSource.name: VehiclesSource,
     ItemsSource.name: ItemsSource,
-    UexCommoditiesSource.name: UexCommoditiesSource,
-    UexVehiclePricesSource.name: UexVehiclePricesSource,
-    UexTradeRoutesSource.name: UexTradeRoutesSource,
+    # UEX trade/economy data (prices, rentals, routes) is served live at query
+    # time by the agent's UEX tools (star_agent.agent.uex_tools), not embedded.
 }
 
 # Upsert in batches (embeddings are computed client-side inside upsert).
