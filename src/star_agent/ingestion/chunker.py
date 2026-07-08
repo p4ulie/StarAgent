@@ -21,22 +21,63 @@ class Chunk:
     metadata: dict[str, Any]
 
 
+def _hard_wrap(text: str, max_chars: int) -> list[str]:
+    """Split a long string into <=max_chars pieces on word boundaries."""
+    pieces: list[str] = []
+    current = ""
+    for word in text.split():
+        # A single word longer than max_chars: break it on characters.
+        while len(word) > max_chars:
+            if current:
+                pieces.append(current)
+                current = ""
+            pieces.append(word[:max_chars])
+            word = word[max_chars:]
+        if current and len(current) + 1 + len(word) > max_chars:
+            pieces.append(current)
+            current = word
+        else:
+            current = f"{current} {word}" if current else word
+    if current:
+        pieces.append(current)
+    return pieces
+
+
 def _split_text(text: str, max_chars: int, overlap: int) -> list[str]:
-    """Greedy paragraph-aware split with character overlap between chunks."""
+    """Split text into chunks that never exceed ``max_chars``.
+
+    Prefers paragraph boundaries; a paragraph longer than ``max_chars`` is
+    word-wrapped so no chunk overflows (which would truncate on short-context
+    embedders like MiniLM, or 500 on a small embedding-server batch).
+    """
     text = text.strip()
     if len(text) <= max_chars:
         return [text] if text else []
 
-    paragraphs = [p.strip() for p in text.split("\n\n") if p.strip()]
+    # Normalize into units no larger than max_chars.
+    units: list[str] = []
+    for para in text.split("\n\n"):
+        para = para.strip()
+        if not para:
+            continue
+        if len(para) <= max_chars:
+            units.append(para)
+        else:
+            units.extend(_hard_wrap(para, max_chars))
+
     chunks: list[str] = []
     current = ""
-    for para in paragraphs:
-        if current and len(current) + len(para) + 2 > max_chars:
+    for unit in units:
+        if current and len(current) + len(unit) + 2 > max_chars:
             chunks.append(current)
-            # carry an overlap tail for context continuity
-            current = (current[-overlap:] + "\n\n" + para) if overlap else para
+            # Carry an overlap tail for continuity, but never exceed max_chars.
+            tail = current[-overlap:] if overlap else ""
+            current = f"{tail}\n\n{unit}" if tail else unit
+            while len(current) > max_chars:
+                chunks.append(current[:max_chars])
+                current = current[max_chars:]
         else:
-            current = f"{current}\n\n{para}" if current else para
+            current = f"{current}\n\n{unit}" if current else unit
     if current:
         chunks.append(current)
     return chunks
