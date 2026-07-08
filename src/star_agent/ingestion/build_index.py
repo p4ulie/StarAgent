@@ -64,6 +64,8 @@ def _ingest_source(
     store: VectorStore,
     retrieved_at: str,
     existing_hashes: dict[str, str] | None = None,
+    max_chars: int = 1500,
+    overlap: int = 150,
 ) -> int:
     """Fetch, chunk, and upsert one source. Returns the number of chunks.
 
@@ -110,7 +112,7 @@ def _ingest_source(
             if existing_hashes.get(doc.id) == content_hash(doc.text):
                 unchanged += 1
                 continue
-            for chunk in chunk_document(doc, retrieved_at):
+            for chunk in chunk_document(doc, retrieved_at, max_chars, overlap):
                 pending.append(chunk)
                 total += 1
                 if len(pending) >= _UPSERT_BATCH_SIZE:
@@ -161,7 +163,12 @@ def build_index(
             source = SOURCES[name](http, max_docs=max_docs)
             try:
                 results[name] = _ingest_source(
-                    source, store, retrieved_at, existing_hashes
+                    source,
+                    store,
+                    retrieved_at,
+                    existing_hashes,
+                    max_chars=settings.chunk_max_chars,
+                    overlap=settings.chunk_overlap,
                 )
             except Exception:  # noqa: BLE001 — one source must not abort the build
                 logger.exception("Source %r failed; skipping", name)

@@ -44,6 +44,11 @@ class Settings(BaseSettings):
     embedding_base_url: str | None = None
     embedding_model: str = "nomic-embed-text"
     embedding_api_key: str | None = None
+    # Max characters per chunk. Keep <= ~1000 for local MiniLM (256-token limit;
+    # larger chunks are silently truncated). Longer-context embedders (nomic,
+    # bge) can use 1500+.
+    chunk_max_chars: int = 1000
+    chunk_overlap: int = 150
 
     # --- Ingestion ---
     ingest_user_agent: str = "StarAgent/0.1 (+https://github.com/p4ulie/StarAgent)"
