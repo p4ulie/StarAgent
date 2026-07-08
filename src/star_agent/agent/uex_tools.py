@@ -414,10 +414,23 @@ async def get_commodity_trade_prices(commodity_name: str) -> dict:
     }
 
 
+def _fmt_route(r: dict) -> dict:
+    dest = r.get("destination_planet_name") or r.get("destination_star_system_name")
+    return {
+        "commodity": r.get("commodity_name"),
+        "buy_at": r.get("origin_terminal_name"),
+        "sell_at": f"{r.get('destination_terminal_name')} ({dest})",
+        "profit_per_scu": _fmt(r.get("profit")),
+        "roi_percent": r.get("price_roi"),
+    }
+
+
 async def find_trade_routes_from(origin: str) -> dict:
     """Best commodity trade routes starting from a planet, ranked by profit.
 
     Use for "what should I haul from Hurston", "best trade route from ArcCorp".
+    The destination may be in another system. For routes that stay within one
+    system, use find_trade_routes_in_system.
 
     Args:
         origin: Origin planet name (e.g. "Hurston", "ArcCorp", "microTech").
@@ -440,14 +453,48 @@ async def find_trade_routes_from(origin: str) -> dict:
     return {
         "status": "success",
         "origin": match.get("name"),
-        "routes": [{
-            "commodity": r.get("commodity_name"),
-            "buy_at": r.get("origin_terminal_name"),
-            "sell_at": f"{r.get('destination_terminal_name')} ({r.get('destination_planet_name') or r.get('destination_star_system_name')})",
-            "profit_per_scu": _fmt(r.get("profit")),
-            "roi_percent": r.get("price_roi"),
-        } for r in routes],
+        "routes": [_fmt_route(r) for r in routes],
         "note": "Community-reported via UEX; changes with game patches.",
+    }
+
+
+async def find_trade_routes_in_system(system: str) -> dict:
+    """Best trade routes that start AND end in the same star system (no jumps).
+
+    Use for "trade routes within Stanton", "best in-system routes in Pyro" —
+    routes where you never leave the system.
+
+    Args:
+        system: The star system name (e.g. "Stanton", "Pyro").
+    """
+    if _client is None:
+        return {"status": "error", "error": "UEX is not configured."}
+    try:
+        systems = await _client.get("star_systems")
+        q = system.lower().strip()
+        sysm = next((s for s in systems if q in str(s.get("name") or "").lower()), None)
+        if not sysm:
+            return {"status": "not_found", "system": system}
+        sid = sysm["id"]
+        planets = [p for p in await _client.get("planets") if p.get("id_star_system") == sid]
+        routes, seen = [], set()
+        for p in planets:
+            for r in await _client.get(f"commodities_routes?id_planet_origin={p['id']}"):
+                if r.get("id_star_system_destination") == sid and r.get("profit"):
+                    key = (r.get("commodity_name"), r.get("origin_terminal_name"),
+                           r.get("destination_terminal_name"))
+                    if key not in seen:
+                        seen.add(key)
+                        routes.append(r)
+    except Exception as exc:  # noqa: BLE001
+        return {"status": "error", "error": f"UEX request failed: {exc}"}
+    routes.sort(key=lambda r: r["profit"], reverse=True)
+    return {
+        "status": "success",
+        "system": sysm.get("name"),
+        "count": len(routes),
+        "routes": [_fmt_route(r) for r in routes[:12]],
+        "note": "Routes staying within the system; community-reported via UEX.",
     }
 
 
@@ -556,6 +603,7 @@ ALL_TOOLS = [
     get_item_purchase_locations,
     get_commodity_trade_prices,
     find_trade_routes_from,
+    find_trade_routes_in_system,
     find_location,
     list_settlements_on,
 ]

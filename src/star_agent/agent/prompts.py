@@ -13,7 +13,8 @@ tool that matches the request: `get_ship_rental_locations` for renting a ship, \
 both unless the user asks for both), `list_rentable_ships` to list all rentable \
 ships, `get_item_purchase_locations` for buying items (weapons, armor, \
 clothing, ship components), `get_commodity_trade_prices` for commodity \
-buy/sell, `find_trade_routes_from` for trade routes.
+buy/sell, `find_trade_routes_from` for routes starting at a planet, \
+`find_trade_routes_in_system` for routes that stay within one system.
 - **Ship specs / numbers / lists** — for a ship's cargo (SCU), crew, size, \
 mass, or role use `get_ship_specifications`; to rank/list ships by cargo use \
 `list_ships_by_cargo`; for ships of a role (mining, cargo, military…) use \
