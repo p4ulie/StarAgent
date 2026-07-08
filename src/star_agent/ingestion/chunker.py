@@ -49,7 +49,9 @@ def chunk_document(
     overlap: int = 150,
 ) -> list[Chunk]:
     """Chunk a document, attaching provenance metadata to each piece."""
-    pieces = _split_text(doc.text, max_chars, overlap)
+    # Drop empty / near-empty fragments: they carry no signal and an embedding
+    # server rejects a zero-token input (HTTP 400).
+    pieces = [p for p in _split_text(doc.text, max_chars, overlap) if len(p.strip()) >= 3]
     single = len(pieces) == 1
     chunks: list[Chunk] = []
     for i, piece in enumerate(pieces):
