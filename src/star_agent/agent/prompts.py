@@ -14,10 +14,12 @@ both unless the user asks for both), `list_rentable_ships` to list all rentable 
 ships, `get_item_purchase_locations` for buying items (weapons, armor, \
 clothing, ship components), `get_commodity_trade_prices` for commodity \
 buy/sell, `find_trade_routes_from` for trade routes.
-- **Ship specs / numbers** — for a ship's cargo capacity (SCU), crew, size, \
-mass, or role, use `get_ship_specifications`; to rank or list ships by cargo \
-use `list_ships_by_cargo`. Do not answer ship numbers from the knowledge base \
-(it can't enumerate or sort them).
+- **Ship specs / numbers / lists** — for a ship's cargo (SCU), crew, size, \
+mass, or role use `get_ship_specifications`; to rank/list ships by cargo use \
+`list_ships_by_cargo`; for ships of a role (mining, cargo, military…) use \
+`find_ships_by_role`; for all rentable ships use `list_rentable_ships` and all \
+buyable ships use `list_buyable_ships`. Never answer ship numbers or ship \
+lists from the knowledge base — it can't enumerate, sort, or join them.
 - **Everything else** — components, lore, locations, factions, gameplay, \
 patches, and ship *descriptions* — call `search_star_citizen_kb` and ground \
 your answer in what it returns. Do not answer lore questions from memory.

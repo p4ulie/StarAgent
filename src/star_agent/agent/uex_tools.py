@@ -241,6 +241,100 @@ async def list_ships_by_cargo(min_scu: int = 0) -> dict:
     return result
 
 
+async def list_buyable_ships() -> dict:
+    """List EVERY ship buyable in-game with cargo (SCU), cheapest price, location.
+
+    Use for "ships I can buy in game", "buyable ships by cargo", "cheapest
+    ships to buy". Joins purchase data with ship specs — one call returns all
+    of them with cargo, price, and location, sorted by cargo. Return them all;
+    do not sample or look up cargo per ship yourself. (These are in-game aUEC
+    prices, not pledge-store USD.)
+    """
+    if _client is None:
+        return {"status": "error", "error": "UEX is not configured."}
+    try:
+        buys = await _client.get("vehicles_purchases_prices_all")
+        vehicles = await _client.get("vehicles")
+    except Exception as exc:  # noqa: BLE001
+        return {"status": "error", "error": f"UEX request failed: {exc}"}
+
+    scu_by_name = {str(v.get("name")): v.get("scu") for v in vehicles if v.get("name")}
+    cheapest: dict[str, dict] = {}
+    for r in buys:
+        name = str(r.get("vehicle_name") or "")
+        price = r.get("price_buy")
+        if not name or not price:
+            continue
+        if name not in cheapest or price < cheapest[name]["_price"]:
+            cheapest[name] = {"_price": price, "terminal": r.get("terminal_name")}
+
+    ships = [
+        {
+            "ship": name,
+            "cargo_scu": scu_by_name.get(name),
+            "cheapest_price": _fmt(v["_price"]),
+            "location": v["terminal"],
+        }
+        for name, v in cheapest.items()
+    ]
+    ships.sort(key=lambda s: (s["cargo_scu"] or -1), reverse=True)
+    return {
+        "status": "success",
+        "count": len(ships),
+        "ships": ships,
+        "note": "Cargo in SCU; cheapest in-game purchase location per ship; community-reported via UEX.",
+    }
+
+
+_ROLE_LOOKUP = {label: flag for flag, label in _ROLE_FLAGS.items()}
+_ROLE_SYNONYMS = {
+    "combat": "military", "fighter": "military", "hauler": "cargo",
+    "transport": "cargo", "miner": "mining", "explorer": "exploration",
+    "medic": "medical", "med": "medical", "refuel": "refueling", "fuel": "refueling",
+}
+
+
+async def find_ships_by_role(role: str) -> dict:
+    """List ships by role/purpose, sorted by cargo capacity.
+
+    Roles: cargo, mining, salvage, military, exploration, medical, racing,
+    stealth, refueling, repair, passenger, industrial, interdiction, science,
+    construction, refinery, bomber, "ground vehicle", "data running". Use for
+    "list all mining ships", "what cargo ships are there", "military ships".
+
+    Args:
+        role: The role/purpose to filter by.
+    """
+    if _client is None:
+        return {"status": "error", "error": "UEX is not configured."}
+    try:
+        vehicles = await _client.get("vehicles")
+    except Exception as exc:  # noqa: BLE001
+        return {"status": "error", "error": f"UEX request failed: {exc}"}
+
+    q = role.lower().strip()
+    q = _ROLE_SYNONYMS.get(q, q)
+    qwords = set(q.split())
+    flag = None
+    matched_role = None
+    for label, fl in _ROLE_LOOKUP.items():
+        if q == label or (qwords & set(label.split())):
+            flag, matched_role = fl, label
+            break
+    if flag is None:
+        return {"status": "unknown_role", "role": role,
+                "available_roles": sorted(_ROLE_LOOKUP)}
+
+    ships = [
+        {"ship": v.get("name"), "cargo_scu": v.get("scu"),
+         "manufacturer": v.get("company_name")}
+        for v in vehicles if v.get(flag)
+    ]
+    ships.sort(key=lambda s: (s["cargo_scu"] or -1), reverse=True)
+    return {"status": "success", "role": matched_role, "count": len(ships),
+            "ships": ships[:_SHIP_LIST_CAP], "note": "From UEX game-file role flags."}
+
+
 async def get_item_purchase_locations(item_name: str) -> dict:
     """Find where to BUY an item in-game, with prices (aUEC).
 
@@ -360,9 +454,11 @@ async def find_trade_routes_from(origin: str) -> dict:
 ALL_TOOLS = [
     get_ship_specifications,
     list_ships_by_cargo,
+    find_ships_by_role,
     get_ship_rental_locations,
     get_ship_purchase_locations,
     list_rentable_ships,
+    list_buyable_ships,
     get_item_purchase_locations,
     get_commodity_trade_prices,
     find_trade_routes_from,
