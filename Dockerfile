@@ -7,11 +7,16 @@ ENV PYTHONUNBUFFERED=1 \
 
 WORKDIR /app
 
-# Install the package (dependency resolution is the slow layer; keep it cached
-# by copying metadata first).
+# Install dependencies against a stub package first, so this heavy layer stays
+# cached until pyproject.toml changes. Code edits then only re-run the fast
+# --no-deps package install below, instead of reinstalling the whole dep tree.
 COPY pyproject.toml README.md LICENSE ./
+RUN mkdir -p src/star_agent && touch src/star_agent/__init__.py \
+    && pip install --upgrade pip && pip install .
+
+# Now install the real package (fast — dependencies are already present).
 COPY src ./src
-RUN pip install --upgrade pip && pip install .
+RUN pip install --no-deps --force-reinstall .
 
 # Run as a non-root user; HOME is writable for the local embedding-model cache.
 # Pre-create ~/.cache with the right owner so the named volume mounted there
