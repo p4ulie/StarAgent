@@ -2,9 +2,7 @@
 
 from __future__ import annotations
 
-from collections.abc import Mapping
 from dataclasses import dataclass
-from typing import Any
 
 from star_agent.rag.store import VectorStore
 
@@ -26,13 +24,8 @@ class Retriever:
     def __init__(self, store: VectorStore) -> None:
         self._store = store
 
-    def retrieve(
-        self,
-        query: str,
-        n_results: int = 5,
-        where: Mapping[str, Any] | None = None,
-    ) -> list[RetrievedChunk]:
-        result = self._store.query(query, n_results=n_results, where=where)
+    def retrieve(self, query: str, n_results: int = 5) -> list[RetrievedChunk]:
+        result = self._store.query(query, n_results=n_results)
         chunks: list[RetrievedChunk] = []
         documents = (result.get("documents") or [[]])[0]
         metadatas = (result.get("metadatas") or [[]])[0]

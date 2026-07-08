@@ -45,18 +45,9 @@ class VectorStore:
             metadatas=[dict(m) for m in metadatas],
         )
 
-    def query(
-        self,
-        text: str,
-        n_results: int = 5,
-        where: Mapping[str, Any] | None = None,
-    ) -> dict[str, Any]:
+    def query(self, text: str, n_results: int = 5) -> dict[str, Any]:
         """Nearest-neighbour search; returns Chroma's raw result dict."""
-        return self._collection.query(
-            query_texts=[text],
-            n_results=n_results,
-            where=dict(where) if where else None,
-        )
+        return self._collection.query(query_texts=[text], n_results=n_results)
 
     def count(self) -> int:
         """Number of documents currently indexed."""

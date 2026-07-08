@@ -44,7 +44,7 @@ async def search_star_citizen_kb(query: str) -> dict:
         return {"status": "error", "error": "Knowledge base is not configured."}
     try:
         # Chroma query is blocking network I/O — keep the event loop free.
-        chunks = await asyncio.to_thread(_retriever.retrieve, query, 5)
+        chunks = await asyncio.to_thread(_retriever.retrieve, query, _n_results)
     except Exception as exc:  # noqa: BLE001 — surface as a tool error to the model
         logger.exception("Knowledge-base search failed")
         return {"status": "error", "error": f"Search failed: {exc}"}

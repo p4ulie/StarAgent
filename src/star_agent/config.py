@@ -64,12 +64,10 @@ class Settings(BaseSettings):
 
     # --- Optional data-source keys (not needed for MVP) ---
     uex_api_token: str | None = None
-    starcitizen_api_key: str | None = None
 
     @field_validator(
         "discord_guild_id",
         "uex_api_token",
-        "starcitizen_api_key",
         "llm_api_key",
         "embedding_api_key",
         mode="before",

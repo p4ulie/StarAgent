@@ -116,27 +116,25 @@ async def get_ship_purchase_locations(ship_name: str) -> dict:
     return await _ship_locations(ship_name, "vehicles_purchases_prices_all", "price_buy", "buy")
 
 
-async def list_rentable_ships() -> dict:
-    """List EVERY rentable ship with cargo (SCU), cheapest rent price, location.
+async def _cheapest_ship_join(endpoint: str, price_key: str, price_label: str, note: str) -> dict:
+    """Join price data (rentals or purchases) with ship specs, cheapest per ship.
 
-    Use for "what ships can I rent", "list rentable ships", "rentable ships by
-    cargo". Joins rental data with ship specs so each entry already has cargo,
-    price, and location — return ALL of them, sorted by cargo (largest first).
-    Do not sample, omit, or try to look up cargo per ship yourself.
+    Returns every ship with cargo (SCU), its cheapest ``price_key`` price under
+    ``price_label``, and the terminal it's at — sorted by cargo (largest first).
     """
     if _client is None:
         return {"status": "error", "error": "UEX is not configured."}
     try:
-        rents = await _client.get("vehicles_rentals_prices_all")
+        prices = await _client.get(endpoint)
         vehicles = await _client.get("vehicles")
     except Exception as exc:  # noqa: BLE001
         return {"status": "error", "error": f"UEX request failed: {exc}"}
 
     scu_by_name = {str(v.get("name")): v.get("scu") for v in vehicles if v.get("name")}
     cheapest: dict[str, dict] = {}
-    for r in rents:
+    for r in prices:
         name = str(r.get("vehicle_name") or "")
-        price = r.get("price_rent")
+        price = r.get(price_key)
         if not name or not price:
             continue
         if name not in cheapest or price < cheapest[name]["_price"]:
@@ -146,18 +144,27 @@ async def list_rentable_ships() -> dict:
         {
             "ship": name,
             "cargo_scu": scu_by_name.get(name),  # None if unknown ("where available")
-            "cheapest_rent": _fmt(v["_price"]),
+            price_label: _fmt(v["_price"]),
             "location": v["terminal"],
         }
         for name, v in cheapest.items()
     ]
     ships.sort(key=lambda s: (s["cargo_scu"] or -1), reverse=True)
-    return {
-        "status": "success",
-        "count": len(ships),
-        "ships": ships,
-        "note": "Cargo in SCU; cheapest rental location per ship; community-reported via UEX.",
-    }
+    return {"status": "success", "count": len(ships), "ships": ships, "note": note}
+
+
+async def list_rentable_ships() -> dict:
+    """List EVERY rentable ship with cargo (SCU), cheapest rent price, location.
+
+    Use for "what ships can I rent", "list rentable ships", "rentable ships by
+    cargo". Joins rental data with ship specs so each entry already has cargo,
+    price, and location — return ALL of them, sorted by cargo (largest first).
+    Do not sample, omit, or try to look up cargo per ship yourself.
+    """
+    return await _cheapest_ship_join(
+        "vehicles_rentals_prices_all", "price_rent", "cheapest_rent",
+        "Cargo in SCU; cheapest rental location per ship; community-reported via UEX.",
+    )
 
 
 _ROLE_FLAGS = {
@@ -250,40 +257,10 @@ async def list_buyable_ships() -> dict:
     do not sample or look up cargo per ship yourself. (These are in-game aUEC
     prices, not pledge-store USD.)
     """
-    if _client is None:
-        return {"status": "error", "error": "UEX is not configured."}
-    try:
-        buys = await _client.get("vehicles_purchases_prices_all")
-        vehicles = await _client.get("vehicles")
-    except Exception as exc:  # noqa: BLE001
-        return {"status": "error", "error": f"UEX request failed: {exc}"}
-
-    scu_by_name = {str(v.get("name")): v.get("scu") for v in vehicles if v.get("name")}
-    cheapest: dict[str, dict] = {}
-    for r in buys:
-        name = str(r.get("vehicle_name") or "")
-        price = r.get("price_buy")
-        if not name or not price:
-            continue
-        if name not in cheapest or price < cheapest[name]["_price"]:
-            cheapest[name] = {"_price": price, "terminal": r.get("terminal_name")}
-
-    ships = [
-        {
-            "ship": name,
-            "cargo_scu": scu_by_name.get(name),
-            "cheapest_price": _fmt(v["_price"]),
-            "location": v["terminal"],
-        }
-        for name, v in cheapest.items()
-    ]
-    ships.sort(key=lambda s: (s["cargo_scu"] or -1), reverse=True)
-    return {
-        "status": "success",
-        "count": len(ships),
-        "ships": ships,
-        "note": "Cargo in SCU; cheapest in-game purchase location per ship; community-reported via UEX.",
-    }
+    return await _cheapest_ship_join(
+        "vehicles_purchases_prices_all", "price_buy", "cheapest_price",
+        "Cargo in SCU; cheapest in-game purchase location per ship; community-reported via UEX.",
+    )
 
 
 _ROLE_LOOKUP = {label: flag for flag, label in _ROLE_FLAGS.items()}
