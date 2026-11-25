@@ -1,0 +1,56 @@
+# StarAgent Helm chart: the Discord bot, the MCP server (SSE on 8765), Chroma and a knowledge-base ingest CronJob.
+
+image:
+  registry: local
+  repository: staragent/star-agent
+  tag: ""            # empty = the chart's appVersion
+  pullPolicy: IfNotPresent
+imagePullSecrets: []
+
+# 0 or 1, for the bot, the MCP server and Chroma alike. Two bots on one token would both answer, and 0 stops
+# Chroma too, so its volume can be filled or copied while nothing writes to it.
+replicas: 1
+
+# Existing Secret, passed whole as environment variables: DISCORD_TOKEN, and optionally LLM_API_KEY and
+# UEX_API_TOKEN.
+existingSecret: staragent
+
+# Plain settings, passed as environment variables to the bot, the MCP server and the ingest.
+# CHROMA_HOST and CHROMA_PORT are set by the chart.
+config:
+  LLM_BASE_URL: ""
+  LLM_MODEL: ""        # required
+  LLM_TIMEOUT: "180"
+  CHROMA_COLLECTION: star_citizen
+  # LiteLLM's bundled cost map; fetching it over the network stalls the first request.
+  LITELLM_LOCAL_MODEL_COST_MAP: "True"
+
+# Pod Security "restricted". The image runs as UID/GID 10001; Chroma runs as the same user.
+podSecurityContext:
+  runAsNonRoot: true
+  runAsUser: 10001
+  runAsGroup: 10001
+  fsGroup: 10001
+  seccompProfile: {type: RuntimeDefault}
+containerSecurityContext:
+  allowPrivilegeEscalation: false
+  capabilities: {drop: [ALL]}
+
+mcp:
+  port: 8765
+
+chroma:
+  # Pinned: a newer Chroma may migrate the store or refuse it. 1.5.9 wrote the first one.
+  image: ghcr.io/chroma-core/chroma:1.5.9
+  persistence:
+    size: 2Gi
+    storageClass: ""   # empty = the cluster default
+
+ingest:
+  # Rebuilds the knowledge base from the sources. Suspended by default; run it by hand with
+  # kubectl create job --from=cronjob/<release>-ingest <name>.
+  suspend: true
+  schedule: "0 5 * * 1"
+  args: []
+
+resources: {}

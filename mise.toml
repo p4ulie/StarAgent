@@ -1,0 +1,19 @@
+# Image and chart tasks. The image is tagged with VERSION; REGISTRY is where it is pushed (the homelab uses
+# REGISTRY=10.34.1.1:30095).
+[tasks."image:build"]
+run = "docker build -t ${REGISTRY:-local}/staragent/star-agent:$(cat VERSION) ."
+
+[tasks."image:push"]
+depends = ["image:build"]
+run = "docker push ${REGISTRY:-local}/staragent/star-agent:$(cat VERSION)"
+
+[tasks."chart:test"]
+description = "Lint and render the Helm chart, and check that it refuses two bots"
+run = """
+set -e
+helm lint helm/staragent --set config.LLM_MODEL=m
+helm template t helm/staragent --set config.LLM_MODEL=m >/dev/null
+if helm template t helm/staragent --set config.LLM_MODEL=m --set replicas=2 >/dev/null 2>&1; then echo 'replicas=2 must fail'; exit 1; fi
+v=$(cat VERSION); grep -q "^version: $v$" helm/staragent/Chart.yaml && grep -q "^appVersion: \\"$v\\"$" helm/staragent/Chart.yaml \
+  || { echo "Chart.yaml version/appVersion must equal VERSION ($v)"; exit 1; }
+"""

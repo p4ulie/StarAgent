@@ -1,0 +1,66 @@
+# Chroma, the vector store. The volume is a standalone claim so it exists, and can be filled, while replicas is 0.
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {{ .Release.Name }}-chroma
+  labels:
+    {{- include "staragent.labels" . | nindent 4 }}
+    app.kubernetes.io/component: chroma
+spec:
+  accessModes: [ReadWriteOnce]
+  {{- with .Values.chroma.persistence.storageClass }}
+  storageClassName: {{ . | quote }}
+  {{- end }}
+  resources:
+    requests:
+      storage: {{ .Values.chroma.persistence.size }}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ .Release.Name }}-chroma
+  labels:
+    {{- include "staragent.labels" . | nindent 4 }}
+    app.kubernetes.io/component: chroma
+spec:
+  replicas: {{ int .Values.replicas }}
+  strategy: {type: Recreate}   # one writer on the SQLite store
+  selector:
+    matchLabels:
+      app.kubernetes.io/instance: {{ .Release.Name }}
+      app.kubernetes.io/component: chroma
+  template:
+    metadata:
+      labels:
+        {{- include "staragent.labels" . | nindent 8 }}
+        app.kubernetes.io/component: chroma
+    spec:
+      securityContext: {{- toYaml .Values.podSecurityContext | nindent 8 }}
+      containers:
+        - name: chroma
+          image: {{ .Values.chroma.image }}
+          securityContext: {{- toYaml .Values.containerSecurityContext | nindent 12 }}
+          ports:
+            - {name: http, containerPort: 8000}
+          readinessProbe:
+            httpGet: {path: /api/v2/heartbeat, port: http}
+            periodSeconds: 10
+          volumeMounts:
+            - {name: data, mountPath: /data}
+      volumes:
+        - name: data
+          persistentVolumeClaim: {claimName: {{ .Release.Name }}-chroma}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ .Release.Name }}-chroma
+  labels:
+    {{- include "staragent.labels" . | nindent 4 }}
+    app.kubernetes.io/component: chroma
+spec:
+  selector:
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    app.kubernetes.io/component: chroma
+  ports:
+    - {name: http, port: 8000, targetPort: http}

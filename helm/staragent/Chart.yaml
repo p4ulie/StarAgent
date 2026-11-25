@@ -1,0 +1,8 @@
+apiVersion: v2
+name: staragent
+description: StarAgent (Star Citizen RAG Discord bot and MCP server) with its Chroma vector store
+type: application
+# Chart version follows the app; both equal the repo's VERSION file (mise run chart:test checks it).
+version: 0.2.0
+appVersion: "0.2.0"
+home: https://github.com/p4ulie/StarAgent

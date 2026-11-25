@@ -19,12 +19,15 @@ COPY src ./src
 RUN pip install --no-deps --force-reinstall .
 
 # Run as a non-root user; HOME is writable for the local embedding-model cache.
-# Pre-create ~/.cache with the right owner so the named volume mounted there
-# (see docker-compose.yml) is initialized app-owned, not root-owned.
-RUN useradd --create-home app \
+# A numeric UID, because Kubernetes' runAsNonRoot can only verify a number.
+RUN useradd --create-home --uid 10001 app \
     && mkdir -p /home/app/.cache \
     && chown -R app:app /app /home/app/.cache
-USER app
+USER 10001
+
+# Bake the local MiniLM embedding model (~80 MB) into the image, so a pod needs neither a cache volume nor
+# network access to download it on first use.
+RUN python -c "from chromadb.utils.embedding_functions import DefaultEmbeddingFunction as E; E()(['warm-up'])"
 
 # Default entrypoint is the Discord bot; compose overrides it for the MCP server
 # and for one-off ingestion (`... run --rm bot star-agent-ingest`).

@@ -1,5 +1,6 @@
-# StarAgent stack. The LLM is NOT here — run your own llama.cpp server and point
-# LLM_BASE_URL at it (e.g. http://host.docker.internal:8080/v1).
+# StarAgent stack. The LLM is NOT here — point LLM_BASE_URL at any external
+# OpenAI-compatible endpoint: a cloud provider (e.g. https://ollama.com/v1,
+# needs LLM_API_KEY) or a local server (e.g. http://host.docker.internal:8080/v1).
 #
 #   cp .env.example .env   # set DISCORD_TOKEN (and LLM_BASE_URL if needed)
 #   docker compose up --build
@@ -7,7 +8,7 @@
 
 services:
   chroma:
-    image: chromadb/chroma
+    image: ghcr.io/chroma-core/chroma:1.5.9   # pinned: a newer Chroma may migrate the store
     volumes:
       - ./chroma-data:/data
     restart: unless-stopped
@@ -22,9 +23,6 @@ services:
       # Use LiteLLM's bundled cost map — never fetch it over the network
       # (avoids an event-loop stall / heartbeat block on the first request).
       LITELLM_LOCAL_MODEL_COST_MAP: "True"
-    volumes:
-      # Persist the local embedding-model cache across (re)runs.
-      - model-cache:/home/app/.cache
     depends_on:
       - chroma
     extra_hosts:
@@ -49,8 +47,6 @@ services:
     env_file: .env
     environment:
       LITELLM_LOCAL_MODEL_COST_MAP: "True"
-    volumes:
-      - model-cache:/home/app/.cache
     depends_on:
       - chroma
     ports:
@@ -58,9 +54,3 @@ services:
     extra_hosts:
       - "host.docker.internal:host-gateway"
     restart: unless-stopped
-
-volumes:
-  # Named volume: embedding-model cache (internal, ~80 MB after first download).
-  # The knowledge base itself lives in ./chroma-data (bind mount) for easy
-  # inspection and backup.
-  model-cache:

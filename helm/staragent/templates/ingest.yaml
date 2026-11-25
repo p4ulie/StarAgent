@@ -1,0 +1,35 @@
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: {{ .Release.Name }}-ingest
+  labels:
+    {{- include "staragent.labels" . | nindent 4 }}
+    app.kubernetes.io/component: ingest
+spec:
+  schedule: {{ .Values.ingest.schedule | quote }}
+  suspend: {{ .Values.ingest.suspend }}
+  concurrencyPolicy: Forbid
+  jobTemplate:
+    spec:
+      backoffLimit: 0
+      template:
+        metadata:
+          labels:
+            {{- include "staragent.labels" . | nindent 12 }}
+            app.kubernetes.io/component: ingest
+        spec:
+          restartPolicy: Never
+          securityContext: {{- toYaml .Values.podSecurityContext | nindent 12 }}
+          {{- with .Values.imagePullSecrets }}
+          imagePullSecrets: {{- toYaml . | nindent 12 }}
+          {{- end }}
+          containers:
+            - name: ingest
+              image: {{ include "staragent.image" . }}
+              imagePullPolicy: {{ .Values.image.pullPolicy }}
+              command: [star-agent-ingest]
+              {{- with .Values.ingest.args }}
+              args: {{- toYaml . | nindent 16 }}
+              {{- end }}
+              securityContext: {{- toYaml .Values.containerSecurityContext | nindent 16 }}
+              {{- include "staragent.env" . | nindent 14 }}

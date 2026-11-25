@@ -264,6 +264,27 @@ daemon before starting. Containers themselves restart on failure via compose's
 It also installs and enables **`staragent-ingest.timer`** (+ its oneshot service), which
 re-ingests the knowledge base on a schedule (see *Scheduled auto-ingest* above).
 
+## Kubernetes (Helm)
+
+`helm/staragent` runs the same three processes as Compose, plus the ingest as a CronJob:
+the bot, the MCP server (Service `<release>-mcp`, SSE on 8765, cluster-internal) and Chroma
+(pinned to `ghcr.io/chroma-core/chroma:1.5.9`, on a PersistentVolumeClaim). Everything runs as
+UID 10001 under Pod Security `restricted`; the MiniLM embedding model is baked into the image.
+
+```bash
+REGISTRY=<registry> mise run image:push     # image <registry>/staragent/star-agent:$(cat VERSION)
+helm install staragent helm/staragent -n staragent --create-namespace \
+  --set image.registry=<registry> \
+  --set config.LLM_BASE_URL=https://ollama.com/v1 --set config.LLM_MODEL=<model>
+kubectl -n staragent create job --from=cronjob/staragent-ingest ingest-now   # build the knowledge base
+mise run chart:test                          # lint and render the chart
+```
+
+The Secret `staragent` (`existingSecret`) is passed whole as environment variables: `DISCORD_TOKEN`,
+and optionally `LLM_API_KEY` and `UEX_API_TOKEN`. `replicas` is 0 or 1 for all three
+Deployments: two bots on one token would both answer, and 0 stops Chroma so its volume can be
+filled. The ingest CronJob is suspended by default (`ingest.suspend`).
+
 ## Data sources
 
 The knowledge base is built by scraping/pulling from the sources above. The full **catalog of
