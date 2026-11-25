@@ -21,7 +21,7 @@ dependencies = [
     # which runs client-side, is available for ingestion and query embedding.
     "chromadb>=1.5,<2",
     # MCP server transport
-    "mcp>=1.2",
+    "mcp>=1.2,<2",  # 2.x renamed FastMCP; the server is written against 1.x
     # Ingestion + config
     "httpx>=0.27",
     "beautifulsoup4>=4.12",
